@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le Resto du Passé Simple</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2b1a12; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); display: block; background: #000;
+           image-rendering: auto; touch-action: manipulation; cursor: default; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080" aria-label="Jeu de restaurant : conjugue au passé simple pour servir les clients"></canvas>
+<input id="saisie" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="20" aria-label="Écris la forme conjuguée" style="position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px;pointer-events:none">
+<script src="js/geometrie.js"></script>
+<script src="js/verbes.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
