@@ -45,16 +45,17 @@
   const TABLE_TOP = 552;                   // haut du sprite de table
   const ORDRE_OUVERTURE = [2, 3, 1, 4, 0, 5];
   const CLIENT_CUT_Y = TABLE_TOP + 120 * S;   // bord bas du client, caché derrière la nappe
-  const Y_COULOIR = 850;                   // pieds du serveur dans le couloir
+  const Y_COULOIR = 880;                   // pieds du serveur dans le couloir
   const HATCH_STAND = { x: 470, y: 345 };  // serveur au passe-plats
   const HATCH_PLATE = { x: 443, y: 268 };  // plat posé sur le comptoir
-  const SERVEUR_H = 300;
-  const TRAY = { x: 62, y: -232 };         // plateau du serveur (repère local, serveur tourné vers la droite)
-  const CLIENT_W = 175;
+  const SERVEUR_H = 370;                   // hauteur du serveur au premier plan (les tables sont plus loin : il doit être plus grand qu'elles)
+  const TRAY = { x: 62 * SERVEUR_H / 300, y: -232 * SERVEUR_H / 300 };   // plateau du serveur (repère local, serveur tourné vers la droite)
+  const CLIENT_W = 270;                    // largeur de la toile du client (le corps en occupe ~70 %, soit ~190 px)
+  const MAIN_GAUCHE = ["client_01_garcon", "client_03_bouclee", "client_06_moustachu"];   // clients dont la main levée est à gauche (les autres : à droite)
   const RAIL = { x: 690, y: 14, w: 445 };
   const TEMPS_PAT = { normal: 1, lent: 0.5, sans: 0 };
   // Porte battante de la salle (mur du fond, entre le passe-plats et le rail) et position du serveur devant la porte
-  const DOOR = { x: 600, y: 112, w: 104, h: 190 };
+  const DOOR = { x: 590, y: 176, w: 140, h: 126 };
   const DOOR_STAND = { x: 652, y: 345 };
   // Cuisine (canvas 1920×1080) : 3 postes sur le sol, chef à gauche, passe-plats à droite, porte de retour à gauche
   const POSTES = [
@@ -63,8 +64,8 @@
     { k: 2, nom: "Plaque", tag: "3e groupe", couleur: "g3", x: 1400, base: 700, debut: 7 },
   ];
   const POSTE_IMG = ["marmite", "plan_travail", "plaque"];
-  const CUIS_PORTE = { x: 30, y: 235, w: 190, h: 400 };        // porte battante de la cuisine (retour en salle)
-  const CUIS_CHEF = { x: 335, base: 805, h: 310 };
+  const CUIS_PORTE = { x: 8, y: 250, w: 224, h: 250 };        // porte battante de la cuisine (retour en salle)
+  const CUIS_CHEF = { x: 305, base: 770, h: 255 };
   const CUIS_PASSE = { x: 1800, y: 290, s: 0.5 };              // passe-plats vu de la cuisine (dessiné en miroir ; x = bord droit)
   const poste_de = (couleur) => (couleur === "g1" ? 0 : couleur === "g2" ? 1 : 2);   // les auxiliaires (violet) se cuisent à la plaque, avec le 3e groupe
 
@@ -103,7 +104,7 @@
   // ------------------------------------------------------------------ état
   let rndSeed = (Date.now() % 2147483646) + 1;
   const rnd = () => (rndSeed = (rndSeed * 16807) % 2147483647) / 2147483647;
-  const G = { mode: "title", t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
+  const G = { keys: { gauche: false, droite: false }, mode: "title", t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
   let S_ = null;     // état de partie
 
   // ------------------------------------------------------------------ accessibilité : réglages mémorisés dans le navigateur
@@ -141,7 +142,7 @@
       score: 0, vies: BAL.vies, servis: 0, niveau: VERBES.GROUPES[G.groupe].debut, spawnT: 0.4, ticketId: 1, fin: 0,
       seance: G.duree > 0, reste: G.duree * 60, rep: 0, justes: 0, partis: 0,
       tables: TABLE_X.map((x, i) => ({ i, x, client: null, plat: null, platT: 0 })),
-      serveur: { x: 330, y: Y_COULOIR, dir: 1, path: [], task: null, pose: "idle", poseT: 0, carry: null, anim: 0 },
+      serveur: { x: 330, y: Y_COULOIR, dir: 1, path: [], task: null, pose: "idle", poseT: 0, carry: null, anim: 0, manuelT: 9 },
       tickets: [], panel: null, hatchQ: [], msgs: [], fx: [], erreurs: [], combo: 0, serie: 0, cuisines: 0,
       cuis: {
         ouverte: false, sel: null, saisie: null, cloche: 0,
@@ -150,6 +151,7 @@
       },
     };
     G.mode = "play"; G.vue = "salle"; G.trans = null; if (champ()) champ().blur();
+    msg("Marche avec ← →, puis Espace pour agir", "Prendre une commande, servir un plat. La souris marche aussi : clique sur un client ou une table.", "info", 7);
   }
   const nbTables = () => Math.min(6, BAL.tablesDepart + Math.floor(S_.servis / BAL.clientsParTable));
   const tableActive = (i) => ORDRE_OUVERTURE.indexOf(i) < nbTables();
@@ -392,7 +394,7 @@
     }
 
     // serveur : déplacement le long du chemin
-    sv.anim += dt;
+    sv.anim += dt; if (sv.marcheT > 0) sv.marcheT -= dt;
     if (sv.poseT > 0) { sv.poseT -= dt; if (sv.poseT <= 0) sv.pose = "idle"; }
     if (sv.path.length) {
       const w = sv.path[0], dx = w.x - sv.x, dy = w.y - sv.y, d = Math.hypot(dx, dy), v = 640 * dt;
@@ -406,8 +408,9 @@
       if (!G.trans.fait && G.trans.t >= 0.22) { G.trans.fait = true; G.vue = G.trans.vers; entrerVue(); }
       if (G.trans.t >= 0.44) G.trans = null;
     }
-    // un plat attend au passe-plats : le serveur libre va le chercher
-    if (G.vue === "salle" && !G.trans && !s.panel && s.hatchQ.length && !sv.carry && !serveurOccupe() && s.fin <= 0) {
+    marcheManuelle(dt);
+    // un plat attend au passe-plats : le serveur libre va le chercher (sauf si le joueur marche au clavier)
+    if (G.vue === "salle" && !G.trans && !s.panel && s.hatchQ.length && !sv.carry && !serveurOccupe() && s.fin <= 0 && sv.manuelT > 1.2) {
       sv.task = { type: "goHatch", table: s.hatchQ[0].table };
       allerVers(sv, HATCH_STAND.x, HATCH_STAND.y);
     }
@@ -417,6 +420,33 @@
     s.fx = s.fx.filter((f) => f.t < f.dur);
     for (const m of s.msgs) m.t += dt;
     s.msgs = s.msgs.filter((m) => m.t < m.dur);
+  }
+
+  // Marche au clavier : flèches gauche / droite dans le couloir, Espace (ou Entrée) pour agir à l'endroit où l'on se trouve.
+  const XMIN = 110, XMAX = 1830, PORTEE = 105;
+  function marcheManuelle(dt) {
+    const sv = S_.serveur, dir = (G.keys.droite ? 1 : 0) - (G.keys.gauche ? 1 : 0);
+    sv.manuelT += dt;
+    if (!dir || G.vue !== "salle" || G.trans || S_.panel || G.paused || S_.fin > 0) return;
+    sv.manuelT = 0; sv.task = null; sv.path = [];                                  // le clavier reprend la main sur un déplacement lancé à la souris
+    sv.dir = dir; sv.x = Math.max(XMIN, Math.min(XMAX, sv.x + dir * 640 * dt));
+    if (sv.y < Y_COULOIR) sv.y = Math.min(Y_COULOIR, sv.y + 640 * dt);
+    sv.anim += dt; sv.marcheT = 0.12;
+  }
+  function tableProche() {                         // table devant laquelle se trouve le serveur (dans le couloir)
+    const sv = S_.serveur; if (sv.y < Y_COULOIR - 6) return -1;
+    let best = -1, bd = PORTEE;
+    for (const tb of S_.tables) if (tableActive(tb.i) && Math.abs(sv.x - tb.x) < bd) { bd = Math.abs(sv.x - tb.x); best = tb.i; }
+    return best;
+  }
+  function agirSurPlace() {
+    const sv = S_.serveur; if (G.vue !== "salle" || G.trans || S_.panel || S_.fin > 0) return;
+    if (sv.task || sv.path.length || sv.poseT > 0) return;
+    const i = tableProche();
+    if (i < 0) { msg(sv.carry ? "Place-toi devant une table (← →), puis Espace." : "Place-toi devant un client qui lève la main (← →), puis Espace.", "", "info", 2.2); return; }
+    if (sv.carry) { arriveeService(i); return; }
+    const c = S_.tables[i].client;
+    if (c && c.state === "call") arriveePrise(i); else msg("Ce client n’a pas besoin de toi pour l’instant.", "", "info", 1.8);
   }
 
   function arrivee() {
@@ -476,9 +506,10 @@
     if (tb.client && (clientAttend(tb.client))) {
       const c = tb.client, k = ["smiley_1_ravi", "smiley_2_content", "smiley_3_neutre", "smiley_4_presse", "smiley_5_mecontent", "smiley_6_furieux"][smileyIdx(c.patience)];
       const rebond = A.calme ? 0 : Math.sin(G.t * (c.patience < 0.3 ? 9 : 3) + tb.i) * (c.patience < 0.3 ? 5 : 2);
-      dessiner(k, tb.x + 100, 452 + rebond, 0.28, 0.28, "centre");
+      const mainG = !img(c.slug + "_appel") || MAIN_GAUCHE.includes(c.slug);      // le smiley se met du côté opposé à la main levée
+      dessiner(k, tb.x + (mainG ? 100 : -100), 452 + rebond, 0.28, 0.28, "centre");
     }
-    if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x - 100, 452, 26, "#e8b33f", "center", "#5a3a29");
+    if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 372, 26, "#e8b33f", "center", "#5a3a29");
   }
 
   function dessinerClient(tb) {
@@ -512,7 +543,7 @@
   function dessinerServeur() {
     const sv = S_.serveur;
     const sc = 0.6 + 0.4 * Math.max(0, Math.min(1, (sv.y - 330) / (Y_COULOIR - 330)));
-    const marche = sv.path.length > 0;
+    const marche = sv.path.length > 0 || (sv.marcheT || 0) > 0;
     const frame = 1 + (Math.floor(sv.anim * 10) % 6);
     let k = marche ? "serveur_marche_" + frame : sv.pose === "oups" ? "serveur_oups" : sv.pose === "content" ? "serveur_content" : "serveur_idle";
     const sprite = img(k) || img("serveur_idle");
@@ -528,7 +559,7 @@
     // plat porté sur le plateau
     if (sv.carry) {
       const im = img(sv.carry.dish);
-      if (im) { const s2 = 0.2; ctx.drawImage(im, TRAY.x - im.width * s2 / 2, TRAY.y + bob - im.height * s2 * 0.8 + 6, im.width * s2, im.height * s2 * 0.8); }
+      if (im) { const s2 = 0.2 * SERVEUR_H / 300; ctx.drawImage(im, TRAY.x - im.width * s2 / 2, TRAY.y + bob - im.height * s2 * 0.8 + 6, im.width * s2, im.height * s2 * 0.8); }
     }
     ctx.restore();
   }
@@ -830,24 +861,24 @@
     const cuit = po.etat === "cuit", phase = cuit && !A.calme && Math.floor(G.t * 4) % 2 === 1;     // deux dessins alternés pendant la cuisson
     ctx.save(); if (!actif) { try { ctx.filter = "grayscale(1) brightness(0.8)"; } catch (e) { /* tant pis */ } }
     const sp = img(POSTE_IMG[k] + (phase ? "_actif" : "_repos")) || img(POSTE_IMG[k] + "_repos");
-    if (sp) { const h = 330, w = sp.width * h / sp.height; ctx.drawImage(sp, x - w / 2, b - h, w, h); } else posteCode(k, x, b, phase, cuit, st);
+    if (sp) { const k = 0.9, w = sp.width * k, h = sp.height * k; ctx.drawImage(sp, x - w / 2, b - h, w, h); } else posteCode(k, x, b, phase, cuit, st);
     ctx.restore();
     ctx.fillStyle = actif ? st.fond : "#8b7a70"; rr(x - 125, b + 14, 250, 72, 16); ctx.fill(); ctx.strokeStyle = actif ? st.contour : "#4a3a30"; ctx.lineWidth = 5; ctx.stroke();
     texte(P.nom, x, b + 40, 28, "#fff", "center", actif ? st.contour : "#4a3a30");
     texte(actif ? P.tag : "bientôt…", x, b + 69, 20, "#fff", "center", actif ? st.contour : "#4a3a30", "normal");
     if (cuit) {                                             // vapeur, étincelles et barre de cuisson
-      if (!A.calme) for (let i = 0; i < 4; i++) { const u = ((G.t * 0.7 + i * 0.25) % 1); ctx.save(); ctx.globalAlpha = 0.55 * (1 - u); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - 40 + i * 27 + Math.sin(G.t * 3 + i) * 8, b - 340 - u * 90, 12 + u * 14, 0, 7); ctx.fill(); ctx.restore(); }
-      ctx.fillStyle = "rgba(60,30,20,0.55)"; rr(x - 95, b - 408, 190, 20, 10); ctx.fill();
-      ctx.fillStyle = st.fond; rr(x - 91, b - 404, Math.max(12, 182 * po.t / po.dur), 12, 6); ctx.fill();
-      texte(pv(po.cmd.pronom, po.cmd.verbe), x, b - 428, 22, "#fff", "center", "#5a3a29");
+      if (!A.calme) for (let i = 0; i < 4; i++) { const u = ((G.t * 0.7 + i * 0.25) % 1); ctx.save(); ctx.globalAlpha = 0.55 * (1 - u); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - 40 + i * 27 + Math.sin(G.t * 3 + i) * 8, b - 290 - u * 80, 12 + u * 14, 0, 7); ctx.fill(); ctx.restore(); }
+      ctx.fillStyle = "rgba(60,30,20,0.55)"; rr(x - 95, b - 338, 190, 20, 10); ctx.fill();
+      ctx.fillStyle = st.fond; rr(x - 91, b - 334, Math.max(12, 182 * po.t / po.dur), 12, 6); ctx.fill();
+      texte(pv(po.cmd.pronom, po.cmd.verbe), x, b - 358, 22, "#fff", "center", "#5a3a29");
     } else if (po.etat === "pret") {
       const bob = A.calme ? 0 : Math.sin(G.t * 4) * 6;
-      dessiner(po.dish, x, b - 330 + bob, 0.3, 0.3, "bas");
-      texte("Prêt ! Clique", x, b - 408, 28, "#fff", "center", st.contour);
+      dessiner(po.dish, x, b - 250 + bob, 0.3, 0.3, "bas");
+      texte("Prêt ! Clique", x, b - 338, 28, "#fff", "center", st.contour);
     } else if (po.etat === "rate") {
       const bob = A.calme ? 0 : Math.sin(G.t * 12) * 3;
-      dessiner("plat_rate", x + bob, b - 320, 0.3, 0.3, "bas");
-      texte("Raté !", x, b - 408, 30, "#d9473b", "center", "#fff7e0");
+      dessiner("plat_rate", x + bob, b - 240, 0.3, 0.3, "bas");
+      texte("Raté !", x, b - 338, 30, "#d9473b", "center", "#fff7e0");
     }
   }
 
@@ -877,8 +908,8 @@
   }
   function dessinerChef() {
     const ch = S_.cuis.chef, pose = ch.dur > 0 ? ch.pose : "neutre", x = CUIS_CHEF.x, b = CUIS_CHEF.base;
-    ctx.fillStyle = "rgba(60,30,20,0.22)"; ctx.beginPath(); ctx.ellipse(x, b, 80, 14, 0, 0, 7); ctx.fill();
     const sp = img("chef_" + pose) || img("chef_neutre");
+    if (!sp) { ctx.fillStyle = "rgba(60,30,20,0.22)"; ctx.beginPath(); ctx.ellipse(x, b, 80, 14, 0, 0, 7); ctx.fill(); }
     if (sp) { const h = CUIS_CHEF.h, w = sp.width * h / sp.height; ctx.drawImage(sp, x - w / 2, b - h, w, h); } else silhouetteChef(x, b, pose);
     if (ch.dur > 0 && ch.texte) {
       const t = ts(26), L = lignesBulle(ch.texte, 400, t), h = L.length * (t + 8) + 24, bx = 245, by = 236;
@@ -891,7 +922,7 @@
 
   function dessinerPorteCuisine() {
     const R = CUIS_PORTE, sp = img("porte_battante");
-    if (sp) { const h = R.h, w = sp.width * h / sp.height; ctx.drawImage(sp, R.x + R.w / 2 - w / 2, R.y, w, h); }
+    if (sp) { const k = Math.min(R.w / sp.width, R.h / sp.height), w = sp.width * k, h = sp.height * k; ctx.drawImage(sp, R.x + R.w / 2 - w / 2, R.y + R.h - h, w, h); }
     else {
       ctx.lineJoin = "round"; ctx.lineWidth = 6; ctx.strokeStyle = "#5a3a29";
       ctx.fillStyle = "#5a3a29"; rr(R.x - 8, R.y - 8, R.w + 16, R.h + 16, 14); ctx.fill();
@@ -908,7 +939,7 @@
   function dessinerPorteSalle() {
     if (!S_.cuis.ouverte) return;
     const R = DOOR, sp = img("porte_battante");
-    if (sp) { const h = R.h, w = sp.width * h / sp.height; ctx.drawImage(sp, R.x + R.w / 2 - w / 2, R.y, w, h); }
+    if (sp) { const k = Math.min(R.w / sp.width, R.h / sp.height), w = sp.width * k, h = sp.height * k; ctx.drawImage(sp, R.x + R.w / 2 - w / 2, R.y + R.h - h, w, h); }
     else {
       ctx.lineJoin = "round"; ctx.lineWidth = 5; ctx.strokeStyle = "#3a2210";
       ctx.fillStyle = "#4a2f22"; rr(R.x - 5, R.y - 5, R.w + 10, R.h + 5, 8); ctx.fill();
@@ -975,7 +1006,7 @@
     const cu = S_.cuis;
     if (!dessiner("bg_cuisine", 0, 0, W / (img("bg_cuisine") ? img("bg_cuisine").width : W), H / (img("bg_cuisine") ? img("bg_cuisine").height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     // décor (facultatif) : le mur du fond est vide tant que cuisine_deco n'est pas fourni
-    [["etagere_bocaux", 700, 56, 190], ["casseroles_suspendues", 960, 44, 200], ["hotte_inox", 1400, 36, 250]].forEach(([n, x, y, h]) => { const s = img(n); if (s) ctx.drawImage(s, x - s.width * h / s.height / 2, y, s.width * h / s.height, h); });
+    [["etagere_bocaux", 565, 50, 150], ["casseroles_suspendues", 1000, 262, 105], ["hotte_inox", 1400, 150, 205]].forEach(([n, x, y, h]) => { const s = img(n); if (s) ctx.drawImage(s, x - s.width * h / s.height / 2, y, s.width * h / s.height, h); });
     if (!img("casseroles_suspendues") && !img("hotte_inox")) { ctx.fillStyle = "#8b5a3c"; rr(1320, 175, 300, 56, 14); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 5; ctx.stroke(); texte("CUISINE", 1470, 204, 40, "#f6e9cf", "center", "#5a3a29"); }
     dessinerPorteCuisine();
     // passe-plats (miroir de celui de la salle) et cloche de service
@@ -1004,7 +1035,7 @@
       texte("Temps : " + mm + ":" + (ss < 10 ? "0" : "") + ss, 40, 112, 44, r <= 30 ? (A.contraste ? "#b00000" : "#d9473b") : (A.contraste ? "#000" : "#5a3a29"), "left");
     } else for (let i = 0; i < BAL.vies; i++) { ctx.save(); ctx.globalAlpha = i < S_.vies ? 1 : 0.2; dessiner("fx_coeur", 52 + i * 62, 98, 0.2, 0.2, "haut"); ctx.restore(); }
     texte("Niveau " + S_.niveau + " · " + infoNiveau().titre, 40, 176, 23, A.contraste ? "#000" : "#6a4a36", "left", null, "normal");
-    texte("P : pause   M : son" + (S_.cuis.ouverte ? (G.vue === "cuisine" ? "   C : salle" : "   C : cuisine") : ""), W - 30, H - 22, 22, "rgba(255,255,255,0.8)", "right", "rgba(60,30,20,0.7)", "normal");
+    texte((G.vue === "salle" ? "← → : marcher   Espace : agir   " : "") + "P : pause   M : son" + (S_.cuis.ouverte ? (G.vue === "cuisine" ? "   C : salle" : "   C : cuisine") : ""), W - 30, H - 22, 22, "rgba(255,255,255,0.8)", "right", "rgba(60,30,20,0.7)", "normal");
   }
 
   // Les messages s'empilent depuis le bas : le plus récent en bas, les autres au-dessus sans se chevaucher.
@@ -1026,6 +1057,18 @@
       if (m.note) texte(m.note, W / 2, y + 112 * k1, ts(22), A.contraste ? "#000" : "#7a4a2a", "center", null, "normal");
       ctx.restore();
     }
+  }
+
+  function dessinerAction() {                      // « Espace » au-dessus de la table où le serveur peut agir
+    if (G.vue !== "salle" || G.trans || S_.panel || G.mode !== "play") return;
+    const sv = S_.serveur; if (sv.task || sv.path.length || sv.poseT > 0) return;
+    const i = tableProche(); if (i < 0) return;
+    const tb = S_.tables[i], c = tb.client;
+    if (!(sv.carry || (c && c.state === "call"))) return;
+    const y = 378 + (A.calme ? 0 : Math.sin(G.t * 6) * 4), hw = sv.carry ? 100 : 62;
+    ctx.fillStyle = "#ffd84a"; rr(tb.x - hw, y - 22, 2 * hw, 44, 14); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tb.x - 10, y + 22); ctx.lineTo(tb.x + 10, y + 22); ctx.lineTo(tb.x, y + 34); ctx.closePath(); ctx.fill(); ctx.stroke();
+    texte(sv.carry ? "Espace : servir" : "Espace", tb.x, y + 1, sv.carry ? 20 : 26, "#4a2f22");
   }
 
   function dessinerFx() {
@@ -1121,6 +1164,7 @@
       if (derriere) dessinerServeur();
       S_.tables.forEach((tb) => { if (tableActive(tb.i)) dessinerTable(tb); });
       if (!derriere) dessinerServeur();
+      dessinerAction();
       dessinerFx();
     }
     dessinerHUD(); if (G.mode === "play") dessinerMessages();
@@ -1181,6 +1225,8 @@
       else { const c = champ(); if (c && document.activeElement !== c) c.focus(); }
       return;
     }
+    if (k === "ArrowLeft") G.keys.gauche = true;
+    if (k === "ArrowRight") G.keys.droite = true;
     if (k === "p" || k === "P") { if (G.mode === "play") G.paused = !G.paused; return; }
     if (k === "m" || k === "M") { G.muted = !G.muted; return; }
     if (G.mode === "title") {
@@ -1202,6 +1248,8 @@
       return;
     }
     if ((k === "c" || k === "C") && !S_.panel) { demanderCuisine(); return; }
+    if ((k === "ArrowLeft" || k === "ArrowRight") && !S_.panel) { e.preventDefault(); return; }
+    if ((k === " " || k === "Enter") && !S_.panel) { e.preventDefault(); agirSurPlace(); return; }
     if (S_.panel) {
       const pn = S_.panel, n = pn.cmd.choix.length;
       if (/^[1-4]$/.test(k)) { if (+k <= n) choisir(+k - 1); }
@@ -1219,6 +1267,8 @@
     _champ.addEventListener("input", () => { if (S_ && S_.cuis.saisie) majTexte(_champ.value.toLowerCase().replace(/[^a-zàâäçéèêëîïôöùûüœ]/g, "")); });
     _champ.addEventListener("blur", () => { setTimeout(() => { if (S_ && G.mode === "play" && G.vue === "cuisine" && S_.cuis.saisie && !G.paused) _champ.focus(); }, 30); });
   }
+  window.addEventListener("keyup", (e) => { if (e.key === "ArrowLeft") G.keys.gauche = false; if (e.key === "ArrowRight") G.keys.droite = false; });
+  window.addEventListener("blur", () => { G.keys.gauche = G.keys.droite = false; });
   document.addEventListener("visibilitychange", () => { if (document.hidden && G.mode === "play") G.paused = true; });
 
   // ------------------------------------------------------------------ boucle
@@ -1232,7 +1282,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, BAL, A, sauver, CLE, get S() { return S_; }, start: nouvellePartie, clic, choisir, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, BAL, A, sauver, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k]); },
   };

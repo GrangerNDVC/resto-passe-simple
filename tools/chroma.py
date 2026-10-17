@@ -57,11 +57,17 @@ def components(rgba, min_area=2500, dilate=6):
     return boxes
 
 
-def grid_sprites(rgba, cols, rows, dilate=18, min_area=400):
+def grid_sprites(rgba, cols, rows, dilate=18, min_area=400, speck=250):
     """Découpe une planche en grille. Chaque sprite regroupe tous les morceaux (fumée, étincelles...)
     dont le centre tombe dans sa case. Retourne la liste des sprites, gauche→droite puis haut→bas
     (None pour une case vide)."""
-    a = np.asarray(rgba)[..., 3]
+    arr = np.array(rgba)                               # copie modifiable
+    raw, _ = ndimage.label(arr[..., 3] > 40)
+    taille = np.bincount(raw.ravel())
+    petit = taille < speck                             # poussières JPEG du fond : on les efface avant de regrouper
+    petit[0] = False
+    arr[..., 3] = np.where(petit[raw], 0, arr[..., 3])
+    a = arr[..., 3]
     h, w = a.shape
     mask = ndimage.binary_dilation(a > 40, iterations=dilate)
     lab, n = ndimage.label(mask)
@@ -75,7 +81,6 @@ def grid_sprites(rgba, cols, rows, dilate=18, min_area=400):
         key = (min(int(cy / (h / rows)), rows - 1), min(int(cx / (w / cols)), cols - 1))
         cells.setdefault(key, []).append(i)
     out = []
-    arr = np.asarray(rgba)
     for r in range(rows):
         for c in range(cols):
             ids = cells.get((r, c))

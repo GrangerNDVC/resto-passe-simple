@@ -14,7 +14,7 @@ def check(nom, ok, detail=""):
 
 with sync_playwright() as p:
     exe = "/opt/pw-browsers/chromium"
-    b = p.chromium.launch(executable_path=exe, args=["--no-sandbox"]) if os.path.exists(exe) else p.chromium.launch(args=["--no-sandbox"])
+    b = p.chromium.launch(executable_path=exe, args=["--no-sandbox","--disable-background-networking","--disable-sync","--no-first-run","--proxy-server=direct://","--proxy-bypass-list=*"]) if os.path.exists(exe) else p.chromium.launch(args=["--no-sandbox","--disable-background-networking","--disable-sync","--no-first-run","--proxy-server=direct://","--proxy-bypass-list=*"])
     pg = b.new_page(viewport={"width": 1920, "height": 1080})
     pg.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
     pg.on("console", lambda m: errors.append("console." + m.type + ": " + m.text) if m.type in ("error", "warning") else None)

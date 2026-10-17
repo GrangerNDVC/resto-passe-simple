@@ -14,7 +14,7 @@ def check(nom, ok, detail=""):
 
 with sync_playwright() as p:
     exe = "/opt/pw-browsers/chromium"
-    b = p.chromium.launch(executable_path=exe, args=["--no-sandbox"]) if os.path.exists(exe) else p.chromium.launch(args=["--no-sandbox"])
+    b = p.chromium.launch(executable_path=exe, args=["--no-sandbox","--disable-background-networking","--disable-sync","--no-first-run","--proxy-server=direct://","--proxy-bypass-list=*"]) if os.path.exists(exe) else p.chromium.launch(args=["--no-sandbox","--disable-background-networking","--disable-sync","--no-first-run","--proxy-server=direct://","--proxy-bypass-list=*"])
     pg = b.new_page(viewport={"width": 1920, "height": 1080})
     pg.on("pageerror", lambda e: errors.append("pageerror: " + str(e)))
     pg.on("console", lambda m: errors.append("console." + m.type + ": " + m.text) if m.type in ("error", "warning") else None)
@@ -63,6 +63,39 @@ with sync_playwright() as p:
     pg.evaluate(f"__jeu.clic({{x:{x}, y:600}})")
     pg.evaluate("__jeu.avancer(3.0)")
     check("client servi", pg.evaluate("__jeu.S.servis") >= 1, "score=" + str(pg.evaluate("__jeu.S.score")))
+
+    # --- 2b. marche au clavier : flèches + Espace (sans souris)
+    pg.evaluate("__jeu.G.chrono='sans'; __jeu.start(); __jeu.avancer(2.0)")
+    pg.evaluate("__jeu.S.serveur.x = 200")
+    pg.keyboard.down("ArrowRight"); pg.evaluate("__jeu.avancer(0.5)"); pg.keyboard.up("ArrowRight")
+    x1 = pg.evaluate("__jeu.S.serveur.x")
+    check("flèche droite : le serveur avance", x1 > 450, "x=%.0f" % x1)
+    pg.keyboard.down("ArrowLeft"); pg.evaluate("__jeu.avancer(0.3)"); pg.keyboard.up("ArrowLeft")
+    check("flèche gauche : le serveur recule", pg.evaluate("__jeu.S.serveur.x") < x1)
+    pg.evaluate("__jeu.avancer(0.2)")
+    xs = pg.evaluate("__jeu.S.serveur.x"); pg.evaluate("__jeu.avancer(0.5)")
+    check("sans touche : le serveur s'arrête", abs(pg.evaluate("__jeu.S.serveur.x") - xs) < 1)
+    pg.keyboard.down("ArrowRight"); pg.evaluate("__jeu.avancer(5)"); pg.keyboard.up("ArrowRight")
+    check("le serveur ne sort pas de la salle", pg.evaluate("__jeu.S.serveur.x") <= 1830)
+    t = pg.evaluate("(() => { const t = __jeu.S.tables.find(t => t.client && t.client.state === 'call'); return t ? t.i : -1; })()")
+    if t < 0:
+        pg.evaluate("__jeu.avancer(8)"); t = pg.evaluate("(() => { const t = __jeu.S.tables.find(t => t.client && t.client.state === 'call'); return t ? t.i : -1; })()")
+    xt = pg.evaluate("__jeu.S.tables[%d].x" % t)
+    pg.evaluate("__jeu.S.serveur.x = %d" % (xt + 40))
+    pg.keyboard.press("Space"); pg.evaluate("__jeu.avancer(0.3)")
+    check("Espace devant un client qui appelle : le panneau s'ouvre", pg.evaluate("!!__jeu.S.panel") and pg.evaluate("__jeu.S.panel.table") == t)
+    pg.evaluate("__jeu.rendre()"); pg.screenshot(path=out + "/16_clavier_panneau.png")
+    cc = pg.evaluate("__jeu.S.panel.cmd"); pg.keyboard.press(str(cc["choix"].index(cc["bonne"]) + 1))
+    pg.evaluate("__jeu.avancer(4)")
+    check("le plat est pris automatiquement au passe-plats", pg.evaluate("!!__jeu.S.serveur.carry"))
+    pg.keyboard.down("ArrowRight"); pg.evaluate("__jeu.avancer(0.2)"); pg.keyboard.up("ArrowRight")     # le joueur marche : on peut reprendre la main
+    pg.evaluate("__jeu.S.serveur.x = %d; __jeu.S.serveur.y = 880" % (xt - 30)); pg.evaluate("__jeu.avancer(0.2)")
+    pg.evaluate("__jeu.rendre()"); pg.screenshot(path=out + "/17_clavier_servir.png")
+    s0 = pg.evaluate("__jeu.S.servis")
+    pg.keyboard.press("Space"); pg.evaluate("__jeu.avancer(1.0)")
+    check("Espace devant la bonne table avec le plat : client servi", pg.evaluate("__jeu.S.servis") == s0 + 1)
+    pg.evaluate("__jeu.S.serveur.x = 1500"); pg.keyboard.press("Space")
+    check("Espace loin de toute table : un message d'aide, rien ne plante", pg.evaluate("__jeu.G.mode") == "play")
 
     # --- 3. les 5 niveaux : un joueur parfait enchaîne, le jeu ne plante pas, chaque niveau propose des verbes de son niveau
     vus = {}

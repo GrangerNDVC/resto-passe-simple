@@ -4,6 +4,8 @@
 Ouvre `index.html` dans un navigateur (Chrome, Edge, Firefox). Aucun serveur n'est nécessaire.
 
 ## Comment on joue
+**Au clavier :** ← → fait marcher le serveur, **Espace** (ou Entrée) agit : prendre la commande du client qui lève la main, ou servir la table devant laquelle on se trouve (une bulle jaune « Espace » l'indique). La souris marche toujours : un clic sur un client ou une table envoie le serveur.
+
 1. Un client lève la main : clique sur lui. Le serveur vient prendre la commande, un ticket s'accroche au rail (ex. « Tu · CHANTER »).
 2. Choisis la bonne forme du passé simple parmi les 4 briques (clic, ou touches 1 à 4).
 3. Le plat sort au passe-plats : le serveur va le chercher. Clique sur **la bonne table** (le numéro est sur le ticket) pour le servir.
