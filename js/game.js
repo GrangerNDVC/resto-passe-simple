@@ -50,7 +50,7 @@
   const HATCH_PLATE = { x: 443, y: 268 };  // plat posé sur le comptoir
   const SERVEUR_H = 370;                   // hauteur du serveur au premier plan (les tables sont plus loin : il doit être plus grand qu'elles)
   const TRAY = { x: 62 * SERVEUR_H / 300, y: -232 * SERVEUR_H / 300 };   // plateau du serveur (repère local, serveur tourné vers la droite)
-  const CLIENT_W = 270;                    // largeur de la toile du client (le corps en occupe ~70 %, soit ~190 px)
+  const CLIENT_W = 230;                    // largeur de la toile du client (le corps en occupe ~70 %, soit ~140 px)
   const MAIN_GAUCHE = ["client_01_garcon", "client_03_bouclee", "client_06_moustachu"];   // clients dont la main levée est à gauche (les autres : à droite)
   const RAIL = { x: 690, y: 14, w: 445 };
   const TEMPS_PAT = { normal: 1, lent: 0.5, sans: 0 };
@@ -184,8 +184,11 @@
 
   // ------------------------------------------------------------------ clients
   function nouveauClient(table) {
-    const vip = rnd() < 0.07;
-    const slug = vip ? CLIENTS[6] : CLIENTS[Math.floor(rnd() * 6)];
+    let vip = rnd() < 0.07;
+    const pris = S_.tables.map((t) => t.client && t.client.slug).filter(Boolean);       // deux tables ne montrent jamais le même personnage
+    const libres = CLIENTS.slice(0, 6).filter((c) => !pris.includes(c));
+    const slug = vip && !pris.includes(CLIENTS[6]) ? CLIENTS[6] : libres[Math.floor(rnd() * libres.length)] || CLIENTS[Math.floor(rnd() * 6)];
+    vip = slug === CLIENTS[6];
     const looks = { skin: ["#f1c9a5", "#d9a47a", "#a9714c", "#f6d5b5"], shirt: ["#e8b33f", "#4c8c4a", "#d9473b", "#e8833a", "#7b4b94", "#c76b8f"], hair: ["#5a3a29", "#2e2420", "#c9a24a", "#9a9a9a", "#a24a2b"] };
     const pick = (a) => a[Math.floor(rnd() * a.length)];
     const patSec = Math.max(BAL.patMin, BAL.patBase - BAL.patPas * rythme()) * (vip ? 0.8 : 1);
@@ -507,9 +510,9 @@
       const c = tb.client, k = ["smiley_1_ravi", "smiley_2_content", "smiley_3_neutre", "smiley_4_presse", "smiley_5_mecontent", "smiley_6_furieux"][smileyIdx(c.patience)];
       const rebond = A.calme ? 0 : Math.sin(G.t * (c.patience < 0.3 ? 9 : 3) + tb.i) * (c.patience < 0.3 ? 5 : 2);
       const mainG = !img(c.slug + "_appel") || MAIN_GAUCHE.includes(c.slug);      // le smiley se met du côté opposé à la main levée
-      dessiner(k, tb.x + (mainG ? 100 : -100), 452 + rebond, 0.28, 0.28, "centre");
+      dessiner(k, tb.x + (mainG ? 88 : -88), 470 + rebond, 0.24, 0.24, "centre");
     }
-    if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 372, 26, "#e8b33f", "center", "#5a3a29");
+    if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 390, 26, "#e8b33f", "center", "#5a3a29");
   }
 
   function dessinerClient(tb) {
