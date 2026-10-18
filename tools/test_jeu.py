@@ -268,18 +268,30 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/15_plats_groupes.png")
     pg.evaluate("__jeu.G.groupe = 0; localStorage.clear()")
 
+    # --- 5b. pause : on doit pouvoir la quitter (clic, Espace, P) et un bouton est visible
+    pg.evaluate("__jeu.G.mode = 'play'; __jeu.G.paused = false")
+    R = {"x": 1920 - 214 + 90, "y": 48}
+    ev("__jeu.clic({x:%d, y:%d})" % (R["x"], R["y"]))
+    check("bouton Pause : met en pause", ev("__jeu.G.paused") is True)
+    ev("__jeu.rendre()"); pg.screenshot(path=out + "/30_pause.png")
+    ev("__jeu.clic({x:900, y:600})")
+    check("pause : un clic reprend la partie", ev("__jeu.G.paused") is False)
+    pg.keyboard.press("p"); check("touche P : pause", ev("__jeu.G.paused") is True)
+    pg.keyboard.press("Space"); check("pause : Espace reprend", ev("__jeu.G.paused") is False)
+    pg.keyboard.press("p"); pg.keyboard.press("Escape"); check("pause : Échap reprend", ev("__jeu.G.paused") is False)
+
     # --- 6. accessibilité : écran Réglages, mémorisation, clavier, voix
     pg.evaluate("localStorage.clear(); __jeu.G.mode = 'title'; __jeu.rendre()")
     pg.evaluate("__jeu.clic({x: 1735, y: 63}); __jeu.rendre()")         # bouton « Réglages » (puis dessin : les boutons existent)
     check("réglages : l'écran s'ouvre", pg.evaluate("__jeu.G.mode") == "settings")
     def opt(ligne, k, n):                                               # centre du bouton k de la ligne
         x0 = 960 - (n * 300 + (n - 1) * 30) / 2
-        return x0 + k * 330 + 150, 150 + ligne * 100 + 22 + 32
-    for ligne, k, n in [(0, 2, 3), (1, 1, 2), (3, 1, 2), (4, 0, 2), (5, 1, 2), (6, 1, 2)]:
+        return x0 + k * 330 + 150, 140 + ligne * 84 + 18 + 25
+    for ligne, k, n in [(0, 2, 3), (1, 1, 2), (3, 1, 2), (4, 0, 2), (5, 1, 2), (6, 1, 2), (7, 1, 3), (8, 1, 2)]:
         x, y = opt(ligne, k, n)
         pg.evaluate(f"__jeu.clic({{x:{x}, y:{y}}})")
     A = pg.evaluate("__jeu.A")
-    check("réglages : choix pris en compte (dont l'aide « pronom » désactivée)", A["taille"] == 2 and A["police"] == 1 and A["termin"] == 1 and A["voix"] == 1 and A["calme"] == 1 and A["pronom"] == 0, str(A))
+    check("réglages : choix pris en compte (dont l'aide « pronom » désactivée)", A["taille"] == 2 and A["police"] == 1 and A["termin"] == 1 and A["voix"] == 1 and A["calme"] == 1 and A["pronom"] == 0 and A["son"] == 1 and A["musique"] == 1, str(A))
     pg.evaluate("__jeu.rendre()")
     pg.screenshot(path=out + "/08_reglages.png")
     mem = pg.evaluate("localStorage.getItem(__jeu.CLE)")

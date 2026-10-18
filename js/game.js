@@ -46,15 +46,15 @@
   const ORDRE_OUVERTURE = [2, 3, 1, 4, 0, 5];
   const CLIENT_CUT_Y = TABLE_TOP + 120 * S;   // bord bas du client, caché derrière la nappe
   const Y_COULOIR = 880;                   // pieds du serveur dans le couloir
-  const HATCH = { x: 165, y: 212, s: 0.85 };                  // passe-plats : creusé dans le mur du fond, comptoir posé sur le sol
-  const HATCH_RECT = { x: 165, y: 212, w: 394, h: 240 };      // zone cliquable
-  const HATCH_STAND = { x: 560, y: 478 };  // serveur au passe-plats (à droite du comptoir pour ne pas cacher les assiettes)
-  const HATCH_PLATE = { x: 361, y: 398 };  // plats posés sur le comptoir
+  const HATCH = { x: 152, y: 172, s: 0.95 };                  // passe-plats : creusé dans le mur du fond (remonté et agrandi au chantier 5)
+  const HATCH_RECT = { x: 152, y: 172, w: 440, h: 267 };      // zone cliquable
+  const HATCH_STAND = { x: 612, y: 478 };  // serveur au passe-plats (à droite du comptoir pour ne pas cacher les assiettes)
+  const HATCH_PLATE = { x: 372, y: 380 };  // plats posés sur le comptoir
   const STAND_DX = -140;                   // le serveur se place à gauche de la table (il ne cache pas le client)
-  const HATCH_ZONE = { x: 360, portee: 220 };   // au clavier : se placer dans cette zone du couloir, puis Espace
+  const HATCH_ZONE = { x: 372, portee: 220 };   // au clavier : se placer dans cette zone du couloir, puis Espace
   const SERVEUR_H = 370;                   // hauteur du serveur au premier plan (les tables sont plus loin : il doit être plus grand qu'elles)
   const TRAY = { x: 62 * SERVEUR_H / 300, y: -232 * SERVEUR_H / 300 };   // plateau du serveur (repère local, serveur tourné vers la droite)
-  const CLIENT_W = 230;                    // largeur de la toile du client (le corps en occupe ~70 %, soit ~140 px)
+  const CLIENT_W = 200;                    // largeur de la toile du client (chantier 5 : 230 → 200, les clients paraissaient trop grands face au serveur)
   const CLIENT_ECH = { client_01_garcon: 0.92, client_02_papy: 1.15, client_03_bouclee: 1.0, client_04_blonde: 0.95, client_05_mamie: 0.92, client_06_moustachu: 1.2, client_07_critique: 1.05 };   // même taille de tête pour tous
   const PERS_LONG = ["1re personne du singulier", "2e personne du singulier", "3e personne du singulier", "1re personne du pluriel", "2e personne du pluriel", "3e personne du pluriel"];
   const PERS_COURT = [["1re pers.", "du sing."], ["2e pers.", "du sing."], ["3e pers.", "du sing."], ["1re pers.", "du plur."], ["2e pers.", "du plur."], ["3e pers.", "du plur."]];
@@ -117,7 +117,7 @@
   // ------------------------------------------------------------------ accessibilité : réglages mémorisés dans le navigateur
   const CLE = "resto_passe_simple_reglages_v1";
   const TAILLES = [1, 1.15, 1.3];
-  const A = { taille: 0, police: 0, contraste: 0, termin: 0, voix: 0, calme: 0, pronom: 1 };
+  const A = { taille: 0, police: 0, contraste: 0, termin: 0, voix: 0, calme: 0, pronom: 1, son: 2, musique: 0 };
   try { if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) A.calme = 1; } catch (e) { /* tant pis */ }
   try {
     const sv = JSON.parse(localStorage.getItem(CLE) || "null");
@@ -167,22 +167,60 @@
   const infoNiveau = () => VERBES.NIVEAUX[niveauVerbes()];
   const rythme = () => S_.niveau - VERBES.GROUPES[G.groupe].debut + 1;      // 1 au départ, quel que soit le groupe choisi
 
-  // ------------------------------------------------------------------ sons (très simples)
-  let actx = null;
+  // ------------------------------------------------------------------ sons (synthétisés : aucun fichier, aucune licence)
+  // Rien ne démarre avant une action du joueur (règle des navigateurs) : le contexte audio n'est créé qu'au premier son demandé.
+  let actx = null, bruitBuf = null;
+  const VOL = [0, 0.45, 1];                       // Coupé / Bas / Normal (réglage « son »)
+  function audio() {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  const muet = () => G.muted || !A.son;
   function bip(freq, dur, type, vol, delay) {
-    if (G.muted) return;
+    if (muet()) return;
     try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + (delay || 0);
+      const ac = audio(), o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + (delay || 0);
       o.type = type || "sine"; o.frequency.value = freq;
-      g.gain.setValueAtTime(vol || 0.08, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+      g.gain.setValueAtTime((vol || 0.08) * VOL[A.son], t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) { /* pas de son */ }
+  }
+  function bruit(dur, vol, delay, fc, type) {      // souffle filtré : plat posé, grésillement
+    if (muet()) return;
+    try {
+      const ac = audio(), t0 = ac.currentTime + (delay || 0);
+      if (!bruitBuf) { bruitBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = bruitBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+      const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = bruitBuf; src.loop = true; f.type = type || "lowpass"; f.frequency.value = fc || 2000;
+      g.gain.setValueAtTime((vol || 0.05) * VOL[A.son], t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t0); src.stop(t0 + dur + 0.02);
     } catch (e) { /* pas de son */ }
   }
   const sonOk = () => { bip(660, 0.12, "triangle"); bip(990, 0.2, "triangle", 0.08, 0.1); };
-  const sonKo = () => { bip(180, 0.3, "sawtooth", 0.07); };
-  const sonCloche = () => { bip(1320, 0.5, "sine", 0.07); bip(1760, 0.4, "sine", 0.05, 0.05); };
+  const sonKo = () => { bip(180, 0.3, "sawtooth", 0.07); bip(140, 0.25, "square", 0.04, 0.08); };
+  const sonCloche = () => { bip(1568, 0.9, "sine", 0.06); bip(2349, 0.6, "sine", 0.035, 0.01); bip(3136, 0.4, "sine", 0.02, 0.02); };            // « ding » du passe-plats
+  const sonClochette = () => { bip(1976, 0.35, "sine", 0.05); bip(2637, 0.5, "sine", 0.05, 0.16); };                                              // un client entre / appelle
+  const sonPlat = () => { bip(130, 0.14, "sine", 0.12); bruit(0.07, 0.05, 0, 2600); };                                                              // assiette posée
+  const sonCuisson = () => { bruit(0.9, 0.035, 0, 3500, "highpass"); };                                                                            // grésillement
   const sonClic = () => bip(520, 0.05, "square", 0.03);
+  // musique d'ambiance : petite valse de bistrot (basse + accords), à 150 pulsations par minute, très douce
+  const ACC = [[523.25, 659.25, 783.99], [440, 523.25, 659.25], [349.23, 440, 523.25], [392, 493.88, 587.33]];
+  const BASSE = [130.81, 110, 87.31, 98];
+  const mus = { next: 0, beat: 0 };
+  function musiqueTick() {
+    if (!A.musique || muet() || G.mode !== "play" || G.paused) return;
+    try {
+      const ac = audio();
+      if (mus.next < ac.currentTime) mus.next = ac.currentTime + 0.05;
+      while (mus.next < ac.currentTime + 0.7) {
+        const t = mus.next - ac.currentTime, bar = Math.floor(mus.beat / 3) % 4, b = mus.beat % 3;
+        if (b === 0) bip(BASSE[bar], 0.34, "triangle", 0.05, t); else ACC[bar].forEach((f) => bip(f, 0.2, "triangle", 0.014, t));
+        mus.next += 0.4; mus.beat++;
+      }
+    } catch (e) { /* pas de son */ }
+  }
+  setInterval(musiqueTick, 250);
 
   // ------------------------------------------------------------------ messages et effets
   const pv = (pronom, mot) => pronom + (pronom.endsWith("’") ? "" : " ") + mot;   // « J’aimai », « Tu chantas »
@@ -323,7 +361,7 @@
     const sv = S_.serveur, c = S_.tables[i].client;
     if (!c || c.etape !== "choix" || S_.panel) return;
     if (sv.carry) { msg("Dépose d’abord ton plat !", "", "info", 1.6); return; }
-    S_.panel = { table: i, cmd: c.cmd, focus: 0, clavier: false, feedback: null };
+    S_.panel = { table: i, cmd: c.cmd, focus: 0, clavier: false, feedback: null, t0: G.t };
     sv.pose = "idle";
     if (A.voix) direCommande(c.cmd, true);
   }
@@ -355,13 +393,13 @@
       c.tries++; c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
       sv.pose = "oups"; sv.poseT = 0.9;
       fx({ img: "fx_croix", x: HATCH_PLATE.x, y: HATCH_PLATE.y - 70, vy: -40, dur: 1.2, scale: 0.28 });
-      p.feedback = { choisie: choix };         // la correction s'affiche dans le panneau : le joueur lit à son rythme
+      p.feedback = { choisie: choix }; p.secT = G.t;         // la correction s'affiche dans le panneau : le joueur lit à son rythme
     }
   }
   function reessayer() {                      // mêmes verbe et personne, nouvelles assiettes
     const p = S_.panel; if (!p || !p.feedback) return;
     p.cmd = Object.assign({}, p.cmd); p.cmd.choix = VERBES.refaireChoix(p.cmd, rnd);
-    p.feedback = null; p.focus = 0; p.clavier = false; sonClic();
+    p.feedback = null; p.focus = 0; p.clavier = false; p.t0 = G.t; sonClic();
     if (A.voix) direCommande(p.cmd, true);
   }
 
@@ -389,12 +427,13 @@
     const gain = (10 + bonus) * (c.vip ? 2 : 1) + (S_.combo >= 2 ? 5 : 0) + (carry.cuisine ? BAL.bonusCuisine : 0);
     S_.score += gain; S_.combo++; S_.servis++; S_.serie++;
     sv.carry = null;
-    tb.plat = carry.dish; tb.platT = 0;
+    tb.plat = carry.dish; tb.platT = 0; sonPlat();
     if (c.ticket) S_.tickets = S_.tickets.filter((t) => t.id !== c.ticket);
     c.state = "eat"; c.t = 0;
     sv.pose = "content"; sv.poseT = 0.9;
     sonCloche();
     fx({ img: "fx_piece", x: tb.x + 60, y: 500, vy: -80, dur: 1.4, scale: 0.28, texte: "+" + gain });
+    if (!A.calme) for (let k = 0; k < 6; k++) { const an = (k / 6) * Math.PI * 2 + 0.4; fx({ img: "fx_etoile", x: tb.x + Math.cos(an) * 20, y: 560 + Math.sin(an) * 10, vx: Math.cos(an) * 170, vy: Math.sin(an) * 140 - 60, dur: 0.8, scale: 0.13 }); }       // étincelles
     if (BAL.coeurTous && !S_.seance && S_.servis % BAL.coeurTous === 0 && S_.vies < BAL.vies) {
       S_.vies++; fx({ img: "fx_coeur", x: 120, y: 130, vy: -30, dur: 1.4, scale: 0.28 });
       msg("Un cœur de regagné !", "", "ok", 2.2);
@@ -448,7 +487,7 @@
       const c = tb.client; if (!c) continue;
       c.t += dt;
       if (tb.platT > 0) { tb.platT -= dt; if (tb.platT <= 0 && tb.plat === "plat_rate") tb.plat = null; }
-      if (c.state === "enter" && c.t > 0.7) { c.state = "call"; c.t = 0; }
+      if (c.state === "enter" && c.t > 0.7) { c.state = "call"; c.t = 0; sonClochette(); }
       else if (clientAttend(c)) {
         if (!(S_.dial && S_.dial.table === tb.i)) c.patience -= (dt / c.patSec) * rate;       // pendant le dialogue, le client patiente
         if (c.patience <= 0) { c.patience = 0; clientPart(tb, true); }
@@ -459,10 +498,11 @@
     }
 
     // serveur : déplacement le long du chemin
-    sv.anim += dt; if (sv.marcheT > 0) sv.marcheT -= dt;
+    const presse = rate > 0 && !A.calme && s.tables.some((tb) => tb.client && clientAttend(tb.client) && tb.client.patience < 0.3);       // un client s'impatiente : le serveur accélère le pas
+    sv.anim += dt * (presse ? 1.3 : 1); if (sv.marcheT > 0) sv.marcheT -= dt;
     if (sv.poseT > 0) { sv.poseT -= dt; if (sv.poseT <= 0) sv.pose = "idle"; }
     if (sv.path.length) {
-      const w = sv.path[0], dx = w.x - sv.x, dy = w.y - sv.y, d = Math.hypot(dx, dy), v = 640 * dt;
+      const w = sv.path[0], dx = w.x - sv.x, dy = w.y - sv.y, d = Math.hypot(dx, dy), v = 640 * dt * (presse ? 1.25 : 1);
       if (d <= v) { sv.x = w.x; sv.y = w.y; sv.path.shift(); if (!sv.path.length) arrivee(); }
       else { sv.x += (dx / d) * v; sv.y += (dy / d) * v; if (Math.abs(dx) > 1) sv.dir = dx > 0 ? 1 : -1; }
     }
@@ -481,7 +521,7 @@
     }
 
     // effets et messages
-    for (const f of s.fx) { f.t += dt; f.y += (f.vy || 0) * dt; }
+    for (const f of s.fx) { f.t += dt; f.y += (f.vy || 0) * dt; f.x += (f.vx || 0) * dt; }
     s.fx = s.fx.filter((f) => f.t < f.dur);
     for (const m of s.msgs) m.t += dt;
     s.msgs = s.msgs.filter((m) => m.t < m.dur);
@@ -593,7 +633,8 @@
     ctx.save(); ctx.globalAlpha = a;
     const appel = c.state === "call" && (A.calme || Math.sin(G.t * 6 + tb.i) > 0);   // calme : la main reste levée, sans clignoter
     const sprite = img(c.slug + (appel ? "_appel" : "_attente")) || img(c.slug + "_attente");
-    const resp = A.calme ? 0 : Math.sin(G.t * 2 + c.bob) * 2;
+    const montee = c.state === "enter" && !A.calme ? Math.pow(1 - Math.min(1, c.t / 0.6), 3) * 60 : 0;      // il glisse jusqu'à sa chaise
+    const resp = (A.calme ? 0 : Math.sin(G.t * 2 + c.bob) * 2) + montee;
     if (sprite) {
       const sc = CLIENT_W * (CLIENT_ECH[c.slug] || 1) / (img(c.slug + "_attente") || sprite).width;
       ctx.drawImage(sprite, x - sprite.width * sc / 2, y - sprite.height * sc + resp, sprite.width * sc, sprite.height * sc);
@@ -677,10 +718,11 @@
   }
 
   // ------------------------------------------------------------------ panneau de choix
-  const PANEL = { x: 150, y: 830, w: 1620, h: 236 };
+  const PANEL = { x: 150, y: 830, w: 1620, h: 236 };       // panneau de saisie (cuisine)
+  const PCH = { x: 150, y: 770, w: 1620, h: 296 };       // panneau « Passe-plats » (assiettes), plus haut que le panneau de saisie de la cuisine
   function briqueRect(i, n) {
-    const bw = 300, bh = 120, gap = 40, total = n * bw + (n - 1) * gap, x0 = PANEL.x + (PANEL.w - total) / 2;
-    return { x: x0 + i * (bw + gap), y: PANEL.y + 82, w: bw, h: bh };
+    const bw = 300, bh = 190, gap = 40, total = n * bw + (n - 1) * gap, x0 = PCH.x + (PCH.w - total) / 2;
+    return { x: x0 + i * (bw + gap), y: PCH.y + 84, w: bw, h: bh };
   }
   // terminaison d'une proposition (aide visuelle) : le radical reste blanc, la terminaison passe en jaune
   const TERMS = ["inrent", "irent", "urent", "èrent", "érent", "aient", "înmes", "întes", "âmes", "âtes", "îmes", "îtes", "ûmes", "ûtes", "imes", "ites", "umes", "utes", "ames", "ates", "ions", "iez", "ons", "ent", "ait", "ais", "ins", "int", "ez", "ai", "as", "es", "is", "it", "us", "ut", "a", "e"];
@@ -688,20 +730,26 @@
     for (const t of TERMS) if (f.length > t.length && f.endsWith(t)) return [f.slice(0, -t.length), t];
     return [f, ""];
   }
-  const FEED_BTN = { x: PANEL.x + PANEL.w / 2 - 190, y: PANEL.y + 152, w: 380, h: 50 };
-  const ECOUTER = { x: PANEL.x + PANEL.w - 230, y: PANEL.y + 32, w: 170, h: 42 };
+  const FEED_BTN = { x: PCH.x + PCH.w / 2 - 190, y: PCH.y + 214, w: 380, h: 56 };
+  const ECOUTER = { x: PCH.x + PCH.w - 230, y: PCH.y + 32, w: 170, h: 42 };
   function dessinerPanneau() {
     const p = S_.panel; if (!p) return;
+    const d = G.t - (p.secT === undefined ? -9 : p.secT);
+    ctx.save(); if (d >= 0 && d < 0.45 && !A.calme) ctx.translate(Math.sin(d * 60) * 14 * (1 - d / 0.45), 0);
+    dessinerPanneau0(p);
+    ctx.restore();
+  }
+  function dessinerPanneau0(p) {
     ctx.fillStyle = A.contraste ? "rgba(0,0,0,0.65)" : "rgba(30,15,8,0.35)"; ctx.fillRect(0, 0, W, H);
-    neuf("panneau_bois", PANEL.x, PANEL.y - 6, PANEL.w, PANEL.h + 12, 36);
-    if (A.contraste) { ctx.fillStyle = "#fff"; rr(PANEL.x + 14, PANEL.y + 4, PANEL.w - 28, 70, 14); ctx.fill(); }
+    neuf("panneau_bois", PCH.x, PCH.y - 6, PCH.w, PCH.h + 12, 36);
+    if (A.contraste) { ctx.fillStyle = "#fff"; rr(PCH.x + 14, PCH.y + 4, PCH.w - 28, 70, 14); ctx.fill(); }
     const fb = p.feedback;
     if (!fb) {
       const titre = "Passe-plats · table " + (p.table + 1) + " : " + p.cmd.verbe.toUpperCase() + ", " + PERS_LONG[p.cmd.p] + (A.pronom ? " (" + LIBELLE_PERSONNE(p.cmd.p) + ")" : "") + " — quelle assiette ?";
       let tt = Math.min(ts(30), 34); texte("", 0, 0, tt);
-      while (tt > 20 && ctx.measureText(titre).width > PANEL.w - (voixOk() ? 300 : 120)) { tt -= 2; texte("", 0, 0, tt); }
-      texte(titre, PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 54, tt, ENCRE());
-    } else texte("Oups ! Ce n’était pas la bonne assiette.", PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 54, Math.min(ts(32), 36), A.contraste ? "#b00000" : "#d9473b");
+      while (tt > 20 && ctx.measureText(titre).width > PCH.w - (voixOk() ? 300 : 120)) { tt -= 2; texte("", 0, 0, tt); }
+      texte(titre, PCH.x + PCH.w / 2 - (voixOk() ? 100 : 0), PCH.y + 54, tt, ENCRE());
+    } else texte("Oups ! Ce n’était pas la bonne assiette.", PCH.x + PCH.w / 2 - (voixOk() ? 100 : 0), PCH.y + 54, Math.min(ts(32), 36), A.contraste ? "#b00000" : "#d9473b");
     if (voixOk()) {
       const sur = G.mouse.x > ECOUTER.x && G.mouse.x < ECOUTER.x + ECOUTER.w && G.mouse.y > ECOUTER.y && G.mouse.y < ECOUTER.y + ECOUTER.h;
       ctx.fillStyle = sur ? "#e8b33f" : FOND(); rr(ECOUTER.x, ECOUTER.y, ECOUTER.w, ECOUTER.h, 14); ctx.fill();
@@ -709,43 +757,56 @@
       texte("Écouter (L)", ECOUTER.x + ECOUTER.w / 2, ECOUTER.y + ECOUTER.h / 2 + 1, 22, ENCRE());
     }
     if (fb) {                                           // la bonne forme et la règle, jamais la forme fautive
-      const cx = PANEL.x + PANEL.w / 2, cmd = p.cmd, r = cmd.regle, notes = [];
+      const cx = PCH.x + PCH.w / 2, cmd = p.cmd, r = cmd.regle, notes = [];
       if (r.circonflexe) notes.push("Accent circonflexe sur le " + r.lettre + " : nous / vous.");
       if (r.note) notes.push(r.note);
       const pr = cmd.pronom.charAt(0).toLowerCase() + cmd.pronom.slice(1);
-      texte("Il fallait : " + pv(pr, cmd.bonne), cx, PANEL.y + 98, Math.min(ts(42), 48), A.contraste ? "#006400" : "#4c8c4a");
+      texte("Il fallait : " + pv(pr, cmd.bonne), cx, PCH.y + 120, Math.min(ts(46), 54), A.contraste ? "#006400" : "#4c8c4a");
       const ligne = r.texte + (notes.length ? "     " + notes.join(" ") : "");
       let tr = Math.min(ts(24), 28); texte("", 0, 0, tr);
-      while (tr > 16 && ctx.measureText(ligne).width > PANEL.w - 140) { tr -= 1; texte("", 0, 0, tr); }
-      texte(ligne, cx, PANEL.y + 134, tr, ENCRE(), "center", null, "normal");
+      while (tr > 16 && ctx.measureText(ligne).width > PCH.w - 140) { tr -= 1; texte("", 0, 0, tr); }
+      texte(ligne, cx, PCH.y + 172, tr, ENCRE(), "center", null, "normal");
       const b = FEED_BTN, sur = dans(b, G.mouse);
       ctx.fillStyle = sur ? "#e8b33f" : "#4c8c4a"; rr(b.x, b.y, b.w, b.h, 16); ctx.fill(); ctx.strokeStyle = A.contraste ? "#000" : "#5a3a29"; ctx.lineWidth = 5; ctx.stroke();
       texte("Réessayer (Espace)", b.x + b.w / 2, b.y + b.h / 2 + 2, 28, sur ? "#4a2f22" : "#fff");
       return;
     }
-    // une seule taille de texte pour les 4 propositions (la plus petite qui les fait toutes tenir)
-    let taille = ts(46);
-    for (const f of p.cmd.choix) { texte("", 0, 0, taille); while (taille > 24 && ctx.measureText(f).width > 300 - 70) { taille -= 2; texte("", 0, 0, taille); } }
+    // les 4 propositions sont de vraies assiettes (celles du groupe) glissant hors du passe-plats ; le mot est écrit sur une étiquette crème bien lisible
+    const st = style(p.cmd.couleur), imP = img(st.plat), n = p.cmd.choix.length;
+    const RW = 284, RH = 74;                              // étiquette
+    let taille = ts(48);
+    for (const f of p.cmd.choix) { texte("", 0, 0, taille); while (taille > 26 && ctx.measureText(f).width > RW - 36) { taille -= 2; texte("", 0, 0, taille); } }
+    const contour = A.contraste ? "#000" : st.contour;
     p.cmd.choix.forEach((f, i) => {
-      const r = briqueRect(i, p.cmd.choix.length);
+      const r = briqueRect(i, n);
+      const k = A.calme ? 1 : Math.max(0, Math.min(1, (G.t - (p.t0 || 0) - i * 0.07) / 0.34)), e3 = 1 - Math.pow(1 - k, 3);
       const sur = G.mouse.x > r.x && G.mouse.x < r.x + r.w && G.mouse.y > r.y && G.mouse.y < r.y + r.h;
-      const e = sur && !A.calme ? 1.05 : 1, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-      ctx.save(); ctx.translate(cx, cy); ctx.scale(e, e);
-      const st = style(p.cmd.couleur);
-      if (A.contraste) { ctx.fillStyle = st.fondContraste; rr(-r.w / 2, -r.h / 2, r.w, r.h, 20); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 5; ctx.stroke(); }
-      else if (!dessiner(st.brique, 0, 0, r.w / 384, r.h / 154, "centre")) { ctx.fillStyle = st.fond; rr(-r.w / 2, -r.h / 2, r.w, r.h, 20); ctx.fill(); }
+      const zoom = (sur && !A.calme ? 1.06 : 1) * (0.35 + 0.65 * e3);
+      const bx = r.x + r.w / 2, by = r.y + r.h;           // milieu du bas de l'assiette
+      const cx = HATCH_PLATE.x + (bx - HATCH_PLATE.x) * e3, cy = (HATCH_PLATE.y + 20) + (by - (HATCH_PLATE.y + 20)) * e3;
+      ctx.save(); ctx.globalAlpha = Math.min(1, 0.25 + k);
+      ctx.fillStyle = "rgba(50,25,12,0.28)"; ctx.beginPath(); ctx.ellipse(cx, cy - 6, 140 * zoom, 18 * zoom, 0, 0, 7); ctx.fill();       // ombre sur le comptoir
+      if (sur && !A.calme) { ctx.fillStyle = "rgba(255,216,74,0.35)"; ctx.beginPath(); ctx.ellipse(cx, cy - 70 * zoom, 160 * zoom, 84 * zoom, 0, 0, 7); ctx.fill(); }
+      ctx.translate(cx, cy); ctx.scale(zoom, zoom);
+      if (imP) { const sc = Math.min(r.w / imP.width, r.h / imP.height); ctx.drawImage(imP, -imP.width * sc / 2, -imP.height * sc, imP.width * sc, imP.height * sc); }
+      else { ctx.fillStyle = st.fond; ctx.beginPath(); ctx.ellipse(0, -r.h / 2, r.w / 2, r.h / 2.4, 0, 0, 7); ctx.fill(); }
+      // étiquette
+      const ey = -RH - 10;                      // l'étiquette ne couvre que le bord avant de l'assiette : on voit le plat au-dessus
+      ctx.fillStyle = A.contraste ? "#fff" : "rgba(250,243,226,0.97)"; rr(-RW / 2, ey, RW, RH, 18); ctx.fill();
+      ctx.strokeStyle = contour; ctx.lineWidth = A.contraste ? 6 : 5; ctx.stroke();
       texte("", 0, 0, taille);
-      const contour = A.contraste ? "#000" : st.contour, [rad, fin] = A.termin ? coupe(f) : [f, ""];
+      const [rad, fin] = A.termin ? coupe(f) : [f, ""], ty = ey + RH / 2 - 7, ink = A.contraste ? "#000" : ENCRE(), col = A.contraste ? "#000" : st.ticket;
       if (fin) {
         const w1 = ctx.measureText(rad).width, w2 = ctx.measureText(fin).width, x0 = -(w1 + w2) / 2;
-        texte(rad, x0, 2, taille, "#fff", "left", contour);
-        texte(fin, x0 + w1, 2, taille, "#ffd84a", "left", contour);
-      } else texte(f, 0, 2, taille, "#fff", "center", contour);
-      texte(st.tag, r.w / 2 - 16, r.h / 2 - 17, 17, "#fff", "right", st.contour, "normal");      // le groupe est aussi écrit : la couleur ne suffit pas
+        texte(rad, x0, ty, taille, ink, "left");
+        texte(fin, x0 + w1, ty, taille, col, "left");
+        ctx.fillStyle = A.contraste ? "#000" : st.fond; rr(x0 + w1, ty + taille * 0.5, w2, 5, 2); ctx.fill();        // la terminaison est aussi soulignée : la couleur ne suffit pas
+      } else texte(f, 0, ty, taille, ink, "center");
+      texte(st.tag, RW / 2 - 12, ey + RH - 13, 15, ink, "right", null, "normal");      // le groupe est aussi écrit
       ctx.restore();
       if (p.clavier && p.focus === i) { ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 8; rr(r.x - 8, r.y - 8, r.w + 16, r.h + 16, 26); ctx.stroke(); ctx.strokeStyle = "#000"; ctx.lineWidth = 3; rr(r.x - 12, r.y - 12, r.w + 24, r.h + 24, 30); ctx.stroke(); }
-      ctx.fillStyle = FOND(); ctx.beginPath(); ctx.arc(r.x + 22, r.y + 20, 17, 0, 7); ctx.fill();
-      texte(String(i + 1), r.x + 22, r.y + 21, 22, ENCRE());
+      ctx.fillStyle = FOND(); ctx.beginPath(); ctx.arc(r.x + 24, r.y + 24, 19, 0, 7); ctx.fill(); ctx.strokeStyle = ENCRE(); ctx.lineWidth = 3; ctx.stroke();
+      texte(String(i + 1), r.x + 24, r.y + 25, 24, ENCRE());
     });
   }
 
@@ -859,7 +920,7 @@
     if (rep === bonne) {
       S_.rep++; S_.justes++; sonOk();
       Object.assign(po, { etat: "cuit", t: 0, dur: BAL.cuisson[sa.poste], ticketId: tk.id, table: tk.table, dish: style(cmd.couleur).plat, cmd, sansBonus: !!tk.aide });
-      tk.etat = "cuisson";
+      tk.etat = "cuisson"; sonCuisson();
       fermerSaisie();
       chefDit("bravo", "Bravo, c’est la bonne forme ! Ça cuit…", 3.5);
       return;
@@ -1057,11 +1118,11 @@
   }
 
   function dessinerMoniteurSalle() {                         // la salle vue depuis la cuisine : qui attend, avec quelle humeur
-    ctx.fillStyle = A.contraste ? "#fff" : "rgba(246,233,207,0.94)"; rr(1190, 20, 700, 124, 20); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
+    ctx.fillStyle = A.contraste ? "#fff" : "rgba(246,233,207,0.94)"; rr(1190, 20, 500, 124, 20); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
     texte("Salle", 1232, 38, 22, ENCRE(), "center", null, "normal");
     S_.tables.forEach((tb) => {
       if (!tableActive(tb.i)) return;
-      const x = 1300 + tb.i * 98, c = tb.client;
+      const x = 1250 + tb.i * 78, c = tb.client;
       texte(String(tb.i + 1), x, 124, 22, ENCRE());
       if (!c || !clientAttend(c)) return;
       dessiner(["smiley_1_ravi", "smiley_2_content", "smiley_3_neutre", "smiley_4_presse", "smiley_5_mecontent", "smiley_6_furieux"][smileyIdx(c.patience)], x, 78, 0.24, 0.24, "centre");
@@ -1123,16 +1184,34 @@
   }
 
   // ------------------------------------------------------------------ interface
+  const BTN_PAUSE = { x: W - 214, y: 20, w: 184, h: 56 };
+  const BTN_REPRENDRE = { x: W / 2 - 330, y: H / 2 + 10, w: 660, h: 100 };
   function dessinerHUD() {
-    ctx.fillStyle = A.contraste ? "#ffffff" : "rgba(246,233,207,0.94)"; rr(24, 20, 410, 186, 22); ctx.fill();
+    const dur = S_ && S_.seance, hh = dur ? 150 : 130;
+    ctx.fillStyle = A.contraste ? "#ffffff" : "rgba(246,233,207,0.94)"; rr(24, 20, 410, hh, 22); ctx.fill();
     ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
-    dessiner("fx_piece", 44, 36, 0.2, 0.2, "haut"); texte(String(S_.score), 130, 66, 46, A.contraste ? "#000" : "#5a3a29", "left");
+    dessiner("fx_piece", 40, 32, 0.2, 0.2, "haut"); texte(String(S_.score), 112, 62, 46, A.contraste ? "#000" : "#5a3a29", "left");
     if (S_.seance) {                      // séance : le temps restant remplace les cœurs
       const r = Math.ceil(S_.reste), mm = Math.floor(r / 60), ss = r % 60;
       texte("Temps : " + mm + ":" + (ss < 10 ? "0" : "") + ss, 40, 112, 44, r <= 30 ? (A.contraste ? "#b00000" : "#d9473b") : (A.contraste ? "#000" : "#5a3a29"), "left");
-    } else for (let i = 0; i < BAL.vies; i++) { ctx.save(); ctx.globalAlpha = i < S_.vies ? 1 : 0.2; dessiner("fx_coeur", 52 + i * 62, 98, 0.2, 0.2, "haut"); ctx.restore(); }
-    texte("Niveau " + S_.niveau + " · " + infoNiveau().titre, 40, 176, 23, A.contraste ? "#000" : "#6a4a36", "left", null, "normal");
+    } else for (let i = 0; i < BAL.vies; i++) { ctx.save(); ctx.globalAlpha = i < S_.vies ? 1 : 0.2; dessiner("fx_coeur", 252 + i * 56, 36, 0.18, 0.18, "haut"); ctx.restore(); }
+    texte("Niveau " + S_.niveau + " · " + infoNiveau().titre, 40, hh + 20 - 22, 23, A.contraste ? "#000" : "#6a4a36", "left", null, "normal");
+    if (G.mode === "play") {                                         // bouton pause toujours visible
+      const b = BTN_PAUSE, sur = dans(b, G.mouse);
+      ctx.fillStyle = sur ? "#e8b33f" : "rgba(246,233,207,0.94)"; rr(b.x, b.y, b.w, b.h, 16); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
+      ctx.fillStyle = "#5a3a29"; ctx.fillRect(b.x + 22, b.y + 16, 8, 24); ctx.fillRect(b.x + 36, b.y + 16, 8, 24);
+      texte("Pause (P)", b.x + 62, b.y + b.h / 2 + 1, 24, "#4a2f22", "left");
+    }
     texte((G.vue === "salle" ? "← → : marcher   Espace : agir   " : "") + "P : pause   M : son" + (S_.cuis.ouverte ? (G.vue === "cuisine" ? "   C : salle" : "   C : cuisine") : ""), W - 30, H - 22, 22, "rgba(255,255,255,0.8)", "right", "rgba(60,30,20,0.7)", "normal");
+  }
+  function dessinerPause() {
+    ctx.fillStyle = "rgba(30,15,8,0.62)"; ctx.fillRect(0, 0, W, H);
+    texte("PAUSE", W / 2, H / 2 - 110, 120, "#f6e9cf", "center", "#5a3a29");
+    const b = BTN_REPRENDRE, sur = dans(b, G.mouse);
+    ctx.fillStyle = sur ? "#e8b33f" : "#4c8c4a"; rr(b.x, b.y, b.w, b.h, 24); ctx.fill(); ctx.strokeStyle = "#f6e9cf"; ctx.lineWidth = 6; ctx.stroke();
+    ctx.fillStyle = sur ? "#4a2f22" : "#fff"; ctx.beginPath(); ctx.moveTo(b.x + 56, b.y + 28); ctx.lineTo(b.x + 56, b.y + 72); ctx.lineTo(b.x + 92, b.y + 50); ctx.closePath(); ctx.fill();
+    texte("Reprendre la partie", b.x + 118, b.y + b.h / 2 + 2, 38, sur ? "#4a2f22" : "#fff", "left");
+    texte("Clique n’importe où, ou appuie sur Espace, Entrée ou P", W / 2, b.y + b.h + 56, 30, "#f6e9cf", "center", "#5a3a29", "normal");
   }
 
   // Les messages s'empilent depuis le bas : le plus récent en bas, les autres au-dessus sans se chevaucher.
@@ -1237,6 +1316,10 @@
     BTN.cuisine = bouton(30, 28, 400, 70, G.cuisine ? "Cuisine : oui" : "Cuisine : non", !!G.cuisine, 30);
     texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
     if (G.cuisine) texte("Après quelques clients servis sans erreur, la cuisine s’ouvre : tu écris toi-même les plats !", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
+    const bob = A.calme ? 0 : Math.sin(G.t * 2) * 5;                       // le chef et le serveur accueillent le joueur
+    const chef = img("chef_bravo"), sv = img("serveur_content");
+    if (chef) { const h = 330, w = chef.width * h / chef.height; ctx.drawImage(chef, 250 - w / 2, 960 - h + bob, w, h); }
+    if (sv) { const h = 470, w = sv.width * h / sv.height; ctx.drawImage(sv, 1700 - w / 2, 975 - h - bob, w, h); }
   }
   const REGLAGES = [
     { cle: "taille", titre: "Taille du texte", opts: ["Normal", "Grand", "Très grand"] },
@@ -1246,21 +1329,24 @@
     { cle: "pronom", titre: "Aide : écrire aussi le pronom (il / elle / on…)", opts: ["Non", "Oui"] },
     { cle: "voix", titre: "Lecture à voix haute automatique", opts: ["Non", "Oui"] },
     { cle: "calme", titre: "Animations", opts: ["Normales", "Calmes"] },
+    { cle: "son", titre: "Volume des sons", opts: ["Coupé", "Bas", "Normal"] },
+    { cle: "musique", titre: "Musique d’ambiance (bistrot)", opts: ["Non", "Oui"] },
   ];
   function dessinerReglages() {
     ctx.fillStyle = A.contraste ? "rgba(0,0,0,0.88)" : "rgba(40,20,10,0.78)"; ctx.fillRect(0, 0, W, H);
     texte("Réglages", W / 2, 80, 80, "#f6e9cf", "center", "#5a3a29");
     BTN.reg = [];
     REGLAGES.forEach((r, i) => {
-      const y = 150 + i * 100, n = r.opts.length, w = 300, gap = 30, x0 = W / 2 - (n * w + (n - 1) * gap) / 2;
-      texte(r.titre, W / 2, y, 32, "#fff", "center", "#5a3a29");
-      r.opts.forEach((o, k) => { const b = bouton(x0 + k * (w + gap), y + 22, w, 64, o, A[r.cle] === k, 28); BTN.reg.push(Object.assign(b, { cle: r.cle, val: k })); });
+      const y = 140 + i * 84, n = r.opts.length, w = 300, gap = 30, x0 = W / 2 - (n * w + (n - 1) * gap) / 2;
+      texte(r.titre, W / 2, y, 28, "#fff", "center", "#5a3a29");
+      r.opts.forEach((o, k) => { const b = bouton(x0 + k * (w + gap), y + 18, w, 50, o, A[r.cle] === k, 26); BTN.reg.push(Object.assign(b, { cle: r.cle, val: k })); });
     });
-    ctx.fillStyle = FOND(); rr(W / 2 - 560, 872, 1120, 70, 18); ctx.fill();
-    let te = ts(38); texte("", 0, 0, te);
+    ctx.fillStyle = FOND(); rr(W / 2 - 560, 892, 1120, 58, 18); ctx.fill();
+    let te = ts(34); texte("", 0, 0, te);
     while (te > 20 && ctx.measureText("Exemple : ils chantèrent / nous mangeâmes").width > 1060) { te -= 2; texte("", 0, 0, te); }
-    texte("Exemple : ils chantèrent / nous mangeâmes", W / 2, 908, te, ENCRE());
-    BTN.retour = bouton(W / 2 - 190, 960, 380, 90, "Retour", false);
+    texte("Exemple : ils chantèrent / nous mangeâmes", W / 2, 922, te, ENCRE());
+    BTN.retour = bouton(W / 2 - 190, 964, 380, 76, "Retour", false);
+    texte("Crédits : sons et musique créés dans le jeu (aucun fichier externe, aucune licence à citer).", W / 2, 1064, 20, "rgba(255,255,255,0.7)", "center", null, "normal");
   }
   function dessinerFin() {
     ctx.fillStyle = "rgba(40,20,10,0.72)"; ctx.fillRect(0, 0, W, H);
@@ -1288,8 +1374,8 @@
     else {
       // passe-plats et plats prêts
       dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
-      if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH.x + 24, HATCH.y + 2, 346, 150, 14); ctx.stroke(); ctx.restore(); }
-      S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = HATCH_PLATE.x + (i - (a.length - 1) / 2) * 96; dessiner(h.dish, x, HATCH_PLATE.y, 0.22, 0.165, "bas"); texte(String(h.table + 1), x + 52, HATCH_PLATE.y - 44, 34, "#fff", "center", "#5a3a29"); });
+      if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH.x + 27, HATCH.y + 2, 387, 168, 14); ctx.stroke(); ctx.restore(); }
+      S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = HATCH_PLATE.x + (i - (a.length - 1) / 2) * 107; dessiner(h.dish, x, HATCH_PLATE.y, 0.25, 0.186, "bas"); texte(String(h.table + 1), x + 58, HATCH_PLATE.y - 50, 36, "#fff", "center", "#5a3a29"); });
       dessinerPorteSalle();
       dessinerRail();
       const sv = S_.serveur, derriere = sv.y < 800;
@@ -1302,7 +1388,7 @@
     }
     dessinerHUD(); if (G.mode === "play") dessinerMessages();
     if (enCuisine) dessinerSaisie(); else dessinerPanneau();
-    if (G.paused) { ctx.fillStyle = "rgba(30,15,8,0.6)"; ctx.fillRect(0, 0, W, H); texte("PAUSE", W / 2, H / 2, 120, "#f6e9cf", "center", "#5a3a29"); }
+    if (G.paused) dessinerPause();
     if (G.mode === "over") dessinerFin();
     if (G.trans) { const a = Math.max(0, 1 - Math.abs(G.trans.t - 0.22) / 0.22); ctx.fillStyle = "rgba(30,15,8," + a.toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
   }
@@ -1327,15 +1413,17 @@
       return;
     }
     if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } return; }
-    if (G.paused || G.trans) return;
+    if (G.paused) { G.paused = false; sonClic(); return; }                   // n'importe quel clic reprend la partie
+    if (G.trans) return;
+    if (dans(BTN_PAUSE, p)) { G.paused = true; return; }
     if (G.vue === "cuisine") { clicCuisine(p); return; }
     if (S_.dial) { avancerDialogue(); return; }
     if (S_.panel) {
-      if (S_.panel.feedback) { if (dans(FEED_BTN, p)) reessayer(); else if (p.y < PANEL.y - 10) S_.panel = null; return; }
+      if (S_.panel.feedback) { if (dans(FEED_BTN, p)) reessayer(); else if (p.y < PCH.y - 10) S_.panel = null; return; }
       const n = S_.panel.cmd.choix.length;
       if (voixOk() && dans(ECOUTER, p)) { direCommande(S_.panel.cmd, true); return; }
       for (let i = 0; i < n; i++) { const r = briqueRect(i, n); if (dans(r, p)) { choisir(i); return; } }
-      if (p.y < PANEL.y - 10) S_.panel = null;          // clic hors du panneau : on ferme (la commande reste à préparer)
+      if (p.y < PCH.y - 10) S_.panel = null;          // clic hors du panneau : on ferme (la commande reste à préparer)
       return;
     }
     if (S_.cuis.ouverte && dans(DOOR, p)) { demanderCuisine(); return; }
@@ -1358,6 +1446,11 @@
   window.addEventListener("keydown", (e) => {
     const k = e.key;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (G.paused && G.mode === "play") {                              // en pause : Espace, Entrée, Échap ou P reprennent (les autres touches ne font rien)
+      if (k === "p" || k === "P" || k === " " || k === "Enter" || k === "Escape") { e.preventDefault(); G.paused = false; sonClic(); }
+      else if (k === "m" || k === "M") G.muted = !G.muted;
+      return;
+    }
     if (G.mode === "play" && S_ && G.vue === "cuisine" && S_.cuis.saisie && !G.paused) {       // en train d'écrire : seules Entrée et Échap sont à nous
       if (k === "Enter") { e.preventDefault(); validerSaisie(); }
       else if (k === "Escape") { e.preventDefault(); fermerSaisie(); }
