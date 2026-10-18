@@ -36,11 +36,18 @@ with sync_playwright() as p:
     check("cuisine fermée au départ", ev("__jeu.S.cuis.ouverte") is False)
     BOT = """() => {
       const J = __jeu, S = J.S; if (!S || J.G.mode !== 'play' || J.G.vue !== 'salle') return;
-      if (S.panel) { const c = S.panel.cmd; J.choisir(c.choix.indexOf(c.bonne)); return; }
+      if (S.dial) { J.avancerDialogue(); return; }
+      if (S.panel) { if (S.panel.feedback) { J.reessayer(); return; } const c = S.panel.cmd; J.choisir(c.choix.indexOf(c.bonne)); return; }
       const sv = S.serveur; if (sv.task || sv.path.length || sv.poseT > 0) return;
       if (sv.carry) { J.clic({x: S.tables[sv.carry.table].x, y: 600}); return; }
+      const att = J.commandesEnAttente(); if (att.length) { J.demanderChoix(att[0].table); return; }
       const t = S.tables.find(t => t.client && t.client.state === 'call'); if (t) J.clic({x: t.x, y: 600});
     }"""
+    def prendre_commande(i):                                # clic sur la table, dialogue en 3 temps
+        xx = ev(f"__jeu.S.tables[{i}].x"); ev(f"__jeu.clic({{x:{xx}, y:600}})"); ev("__jeu.avancer(3.0)")
+        for _ in range(3):
+            if ev("!!__jeu.S.dial"): ev("__jeu.avancerDialogue()")
+        ev("__jeu.avancer(0.3)")
     for _ in range(300):
         ev(BOT); ev("__jeu.avancer(0.5)")
         if ev("__jeu.S.cuis.ouverte") or ev("__jeu.S.servis") >= 2: break
@@ -57,9 +64,9 @@ with sync_playwright() as p:
         if t >= 0: break
         ev("__jeu.avancer(0.5)")
     x = ev(f"__jeu.S.tables[{t}].x")
-    ev(f"__jeu.clic({{x:{x}, y:600}})"); ev("__jeu.avancer(3.5)")
+    prendre_commande(t)
     tk = ev("__jeu.S.tickets.find(t => t.cuisine)")
-    check("commande à cuisiner : ticket marqué cuisine, pas de panneau QCM", tk is not None and ev("!__jeu.S.panel") and tk["etat"] == "attente", str(tk and tk["cmd"]["verbe"]))
+    check("commande à cuisiner : ticket marqué cuisine, pas de choix d'assiette", tk is not None and ev("!__jeu.S.panel") and tk["etat"] == "attente", str(tk and tk["cmd"]["verbe"]))
     check("le client attend (état wait)", ev(f"__jeu.S.tables[{t}].client.state") == "wait")
 
     # --- 3. la porte : serveur -> porte -> cuisine
@@ -138,8 +145,7 @@ with sync_playwright() as p:
         t2 = ev("(() => { const t = __jeu.S.tables.find(t => t.client && t.client.state === 'call'); return t ? t.i : -1; })()")
         if t2 >= 0: break
         ev("__jeu.avancer(0.5)")
-    x2 = ev(f"__jeu.S.tables[{t2}].x")
-    ev(f"__jeu.clic({{x:{x2}, y:600}})"); ev("__jeu.avancer(3.5)")
+    prendre_commande(t2)
     ev(f"__jeu.clic({{x:{D['x'] + D['w'] / 2}, y:{D['y'] + 90}}})"); ev("__jeu.avancer(2.5)")
     tk2 = ev("__jeu.S.tickets.find(t => t.cuisine && t.etat === 'attente')")
     k2 = {"g1": 0, "g2": 1, "g3": 2, "aux": 2}[tk2["cmd"]["couleur"]]
@@ -165,9 +171,11 @@ with sync_playwright() as p:
         if (!cu.postes.some(p => p.etat === 'cuit') || !sel) { if (!sel && !cu.postes.some(p => p.etat === 'cuit' || p.etat === 'pret')) J.changerVue('salle'); }
         return;
       }
-      if (S.panel) { const c = S.panel.cmd; J.choisir(c.choix.indexOf(c.bonne)); return; }
+      if (S.dial) { J.avancerDialogue(); return; }
+      if (S.panel) { if (S.panel.feedback) { J.reessayer(); return; } const c = S.panel.cmd; J.choisir(c.choix.indexOf(c.bonne)); return; }
       const sv = S.serveur; if (sv.task || sv.path.length || sv.poseT > 0) return;
       if (sv.carry) { J.clic({x: S.tables[sv.carry.table].x, y: 600}); return; }
+      const att0 = J.commandesEnAttente(); if (att0.length) { J.demanderChoix(att0[0].table); return; }
       const t = S.tables.find(t => t.client && t.client.state === 'call'); if (t) { J.clic({x: t.x, y: 600}); return; }
       const att = S.tickets.some(t => t.cuisine && t.etat === 'attente') || cu.postes.some(p => p.etat === 'pret');
       if (att && cu.ouverte) J.clic({x: J.DOOR.x + 50, y: J.DOOR.y + 90});

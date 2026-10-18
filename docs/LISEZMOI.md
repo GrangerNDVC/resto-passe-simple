@@ -4,15 +4,19 @@
 Ouvre `index.html` dans un navigateur (Chrome, Edge, Firefox). Aucun serveur n'est nécessaire.
 
 ## Comment on joue
-**Au clavier :** ← → fait marcher le serveur, **Espace** (ou Entrée) agit : prendre la commande du client qui lève la main, ou servir la table devant laquelle on se trouve (une bulle jaune « Espace » l'indique). La souris marche toujours : un clic sur un client ou une table envoie le serveur.
+**Au clavier :** ← → fait marcher le serveur, **Espace** (ou Entrée) agit. La souris marche toujours (clic sur un client, un ticket, le passe-plats ou une table).
 
-1. Un client lève la main : clique sur lui. Le serveur vient prendre la commande, un ticket s'accroche au rail (ex. « Tu · CHANTER »).
-2. Choisis la bonne forme du passé simple parmi les 4 briques (clic, ou touches 1 à 4).
-3. Le plat sort au passe-plats : le serveur va le chercher. Clique sur **la bonne table** (le numéro est sur le ticket) pour le servir.
-4. Erreur de forme : plat raté, le client s'impatiente, la bonne forme s'affiche. On peut recommander.
+1. **Prendre la commande.** Un client lève la main : va à sa table (Espace, ou clic). Un petit dialogue s'affiche, avance avec Espace :
+   - le client choisit un **verbe à l'infinitif** sur la carte (ex. MANGER) ;
+   - le serveur demande « C'est noté ! Et pour la cuisson ? » ;
+   - le client répond par la **personne** (ex. « À la 3e personne du singulier »). Pendant le dialogue, sa patience est gelée.
+   Un ticket (verbe + personne + numéro de table) s'accroche au rail du fond.
+2. **Aller au passe-plats** (dans le mur, à gauche). Le serveur y va tout seul. Au clavier, une flèche reprend la main ; place-toi près du passe-plats et appuie sur Espace. Tu peux aussi cliquer sur le passe-plats ou sur un ticket.
+3. **Choisir la bonne assiette** : chaque assiette porte une forme du verbe au passé simple (touches 1 à 4, flèches + Entrée, ou clic). Si tu te trompes, la bonne forme et la règle s'affichent dans le panneau : lis à ton rythme, puis « Réessayer » (Espace). Échap ferme le choix, la commande reste à préparer.
+4. **Servir la bonne table** : le numéro est sur le ticket (Espace devant la table, ou clic).
 5. Un client dont la patience (smiley) tombe à zéro part fâché : on perd un cœur. Trois cœurs perdus : fin de partie, avec la liste « à revoir ».
 
-Touches : `P` pause, `M` son. Écran titre : vitesse des clients **Normal / Lent / Sans chrono** (sans chrono = la patience ne baisse pas), **verbes** (tous, 1er, 2e ou 3e groupe) et type de partie (3 cœurs ou séance de 3, 5 ou 10 minutes).
+Réglages utiles (écran titre → Réglages) : « Aide : écrire aussi le pronom » (il / elle / on…) est activée par défaut ; désactive-la pour que l'élève identifie seul la personne.
 
 ## La cuisine (chantier 4)
 Après **10 clients servis d'affilée sans qu'aucun ne parte fâché**, la cuisine s'ouvre (message d'annonce, porte battante « CUISINE » sur le mur du fond). Ensuite, **6 commandes sur 10** sont « à cuisiner » (les autres restent des QCM en salle) :

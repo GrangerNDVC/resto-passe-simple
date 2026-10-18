@@ -46,11 +46,18 @@
   const ORDRE_OUVERTURE = [2, 3, 1, 4, 0, 5];
   const CLIENT_CUT_Y = TABLE_TOP + 120 * S;   // bord bas du client, caché derrière la nappe
   const Y_COULOIR = 880;                   // pieds du serveur dans le couloir
-  const HATCH_STAND = { x: 470, y: 345 };  // serveur au passe-plats
-  const HATCH_PLATE = { x: 443, y: 268 };  // plat posé sur le comptoir
+  const HATCH = { x: 165, y: 212, s: 0.85 };                  // passe-plats : creusé dans le mur du fond, comptoir posé sur le sol
+  const HATCH_RECT = { x: 165, y: 212, w: 394, h: 240 };      // zone cliquable
+  const HATCH_STAND = { x: 560, y: 478 };  // serveur au passe-plats (à droite du comptoir pour ne pas cacher les assiettes)
+  const HATCH_PLATE = { x: 361, y: 398 };  // plats posés sur le comptoir
+  const STAND_DX = -140;                   // le serveur se place à gauche de la table (il ne cache pas le client)
+  const HATCH_ZONE = { x: 360, portee: 220 };   // au clavier : se placer dans cette zone du couloir, puis Espace
   const SERVEUR_H = 370;                   // hauteur du serveur au premier plan (les tables sont plus loin : il doit être plus grand qu'elles)
   const TRAY = { x: 62 * SERVEUR_H / 300, y: -232 * SERVEUR_H / 300 };   // plateau du serveur (repère local, serveur tourné vers la droite)
   const CLIENT_W = 230;                    // largeur de la toile du client (le corps en occupe ~70 %, soit ~140 px)
+  const CLIENT_ECH = { client_01_garcon: 0.92, client_02_papy: 1.15, client_03_bouclee: 1.0, client_04_blonde: 0.95, client_05_mamie: 0.92, client_06_moustachu: 1.2, client_07_critique: 1.05 };   // même taille de tête pour tous
+  const PERS_LONG = ["1re personne du singulier", "2e personne du singulier", "3e personne du singulier", "1re personne du pluriel", "2e personne du pluriel", "3e personne du pluriel"];
+  const PERS_COURT = [["1re pers.", "du sing."], ["2e pers.", "du sing."], ["3e pers.", "du sing."], ["1re pers.", "du plur."], ["2e pers.", "du plur."], ["3e pers.", "du plur."]];
   const MAIN_GAUCHE = ["client_01_garcon", "client_03_bouclee", "client_06_moustachu"];   // clients dont la main levée est à gauche (les autres : à droite)
   const RAIL = { x: 690, y: 14, w: 445 };
   const TEMPS_PAT = { normal: 1, lent: 0.5, sans: 0 };
@@ -110,7 +117,7 @@
   // ------------------------------------------------------------------ accessibilité : réglages mémorisés dans le navigateur
   const CLE = "resto_passe_simple_reglages_v1";
   const TAILLES = [1, 1.15, 1.3];
-  const A = { taille: 0, police: 0, contraste: 0, termin: 0, voix: 0, calme: 0 };
+  const A = { taille: 0, police: 0, contraste: 0, termin: 0, voix: 0, calme: 0, pronom: 1 };
   try { if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) A.calme = 1; } catch (e) { /* tant pis */ }
   try {
     const sv = JSON.parse(localStorage.getItem(CLE) || "null");
@@ -132,7 +139,7 @@
     try { window.speechSynthesis.cancel(); const u = new window.SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = 0.85; window.speechSynthesis.speak(u); } catch (e) { /* ignoré */ }
   }
   function direCommande(cmd, avecChoix) {
-    let t = pv(cmd.pronom, cmd.verbe) + ", au passé simple.";
+    let t = cmd.verbe + ", " + PERS_LONG[cmd.p] + ", au passé simple.";
     if (avecChoix) cmd.choix.forEach((f, i) => { t += " " + (i + 1) + ", " + f + "."; });
     dire(t);
   }
@@ -151,7 +158,7 @@
       },
     };
     G.mode = "play"; G.vue = "salle"; G.trans = null; if (champ()) champ().blur();
-    msg("Marche avec ← →, puis Espace pour agir", "Prendre une commande, servir un plat. La souris marche aussi : clique sur un client ou une table.", "info", 7);
+    msg("Marche avec ← →, puis Espace pour agir", "1. Prends la commande   2. Va au passe-plats choisir la bonne assiette   3. Sers la bonne table. La souris marche aussi.", "info", 8);
   }
   const nbTables = () => Math.min(6, BAL.tablesDepart + Math.floor(S_.servis / BAL.clientsParTable));
   const tableActive = (i) => ORDRE_OUVERTURE.indexOf(i) < nbTables();
@@ -204,9 +211,10 @@
     const c = table.client; if (!c) return;
     if (c.ticket) S_.tickets = S_.tickets.filter((t) => t.id !== c.ticket);
     if (S_.panel && S_.panel.table === table.i) S_.panel = null;
+    if (S_.dial && S_.dial.table === table.i) S_.dial = null;
     if (S_.serveur.carry && S_.serveur.carry.table === table.i) S_.serveur.carry = null;
     nettoyerCuisine(table.i, c.ticket);
-    if (S_.serveur.task && S_.serveur.task.table === table.i && S_.serveur.task.type === "goOrder") { S_.serveur.task = null; S_.serveur.path = []; }
+    if (S_.serveur.task && S_.serveur.task.table === table.i && (S_.serveur.task.type === "goOrder" || S_.serveur.task.type === "goChoix")) { S_.serveur.task = null; S_.serveur.path = []; }
     if (colere) {
       S_.combo = 0; S_.partis++; S_.serie = 0;
       c.state = "leave"; c.t = 0; c.angry = true; sonKo();
@@ -238,10 +246,20 @@
     if (sv.carry) { msg("Dépose d’abord ton plat !", "", "info", 1.6); return; }
     if (serveurOccupe()) return;
     sv.task = { type: "goOrder", table: i };
-    allerVers(sv, tb.x, Y_COULOIR);
+    allerVers(sv, tb.x + STAND_DX, Y_COULOIR);
     sonClic();
   }
 
+  // Prise de commande = petit dialogue : le client choisit un verbe sur la carte, le serveur demande « pour la cuisson ? »,
+  // le client donne la personne. Le serveur va ensuite au passe-plats choisir l'assiette (la bonne forme conjuguée).
+  const DIAL_N = 3;
+  function ligneDialogue(d) {
+    const c = S_.tables[d.table].client, cmd = c.cmd;
+    if (d.step === 0) return { qui: "client", haut: "Je voudrais :", gros: cmd.verbe.toUpperCase(), couleur: style(cmd.couleur).contour, voix: "Je voudrais " + cmd.verbe + "." };
+    if (d.step === 1) return { qui: "serveur", haut: "C’est noté ! Et pour la cuisson ?", voix: "C’est noté. Et pour la cuisson ?" };
+    return { qui: "client", haut: "À la " + PERS_LONG[cmd.p] + ".", bas: A.pronom ? "(" + LIBELLE_PERSONNE(cmd.p) + ")" : "", voix: "À la " + PERS_LONG[cmd.p] + "." };
+  }
+  function direDialogue() { if (A.voix && S_.dial) dire(ligneDialogue(S_.dial).voix); }
   function arriveePrise(i) {
     const tb = S_.tables[i], c = tb.client, sv = S_.serveur;
     sv.task = null;
@@ -251,20 +269,62 @@
       c.ticket = S_.ticketId++;
       c.cuisine = S_.cuis.ouverte && rnd() < BAL.cuisineProba;
       S_.tickets.push({ id: c.ticket, table: i, cmd: c.cmd, cuisine: c.cuisine, etat: "attente" });
-      if (c.cuisine) {                       // plat à fabriquer en cuisine : pas de QCM, le client attend
-        c.state = "wait"; c.patSec *= BAL.cuisinePatMul; sv.pose = "idle";
-        msg("Commande à cuisiner !", "Passe la porte battante (touche C) : " + pv(c.cmd.pronom, c.cmd.verbe) + ", au passé simple.", "info", 3.6);
-        if (A.voix) direCommande(c.cmd, false);
-        return;
-      }
-    } else {
-      // nouvelle tentative : mêmes verbe et personne, nouveaux distracteurs
-      c.cmd = Object.assign({}, c.cmd);
-      c.cmd.choix = VERBES.refaireChoix(c.cmd, rnd);
     }
-    c.state = "order";
+    c.state = "order"; c.etape = "dial"; sv.pose = "idle"; sv.dir = 1;
+    S_.dial = { table: i, step: 0 };
+    direDialogue();
+  }
+  function avancerDialogue() {
+    const d = S_.dial; if (!d) return;
+    d.step++; sonClic();
+    if (d.step >= DIAL_N) { finDialogue(d.table); return; }
+    direDialogue();
+  }
+  function finDialogue(i) {
+    const c = S_.tables[i].client, sv = S_.serveur;
+    S_.dial = null;
+    if (!c) return;
+    c.state = "wait";
+    if (c.cuisine) {                         // plat à fabriquer en cuisine : pas d'assiette à choisir, le client attend
+      c.etape = "cuisine"; c.patSec *= BAL.cuisinePatMul;
+      msg("Commande à cuisiner !", "Passe la porte battante (touche C) : " + cmdTexte(c.cmd) + ", au passé simple.", "info", 3.6);
+      if (A.voix) direCommande(c.cmd, false);
+      return;
+    }
+    c.etape = "choix";
+    msg("Va au passe-plats !", "Choisis l’assiette avec le bon verbe, bien conjugué.", "info", 3.2);
+    sv.task = { type: "goChoix", table: i };
+    allerVers(sv, HATCH_STAND.x, HATCH_STAND.y);
+  }
+  const cmdTexte = (cmd) => cmd.verbe.toUpperCase() + ", " + PERS_LONG[cmd.p];
+  const commandesEnAttente = () => S_.tickets.filter((t) => { const c = S_.tables[t.table].client; return c && c.ticket === t.id && c.etape === "choix"; });
+  function demanderChoix(i) {                // aller au passe-plats choisir l'assiette de la table i
+    const sv = S_.serveur;
+    if (serveurOccupe() || S_.panel || S_.dial) return;
+    if (sv.carry) { msg("Sers d’abord ton plat !", "", "info", 1.6); return; }
+    sv.task = { type: "goChoix", table: i };
+    allerVers(sv, HATCH_STAND.x, HATCH_STAND.y);
+    sonClic();
+  }
+  function agirAuPasse() {
+    const sv = S_.serveur;
+    if (serveurOccupe() || S_.panel || S_.dial) return;
+    const att = commandesEnAttente();
+    if (sv.carry) { msg("Sers d’abord ton plat !", "", "info", 1.6); return; }
+    if (att.length) { demanderChoix(att[0].table); return; }
+    if (S_.hatchQ.length) { sv.task = { type: "goHatch", table: S_.hatchQ[0].table }; allerVers(sv, HATCH_STAND.x, HATCH_STAND.y); sonClic(); return; }
+    msg("Rien à faire au passe-plats pour l’instant.", "", "info", 1.8);
+  }
+  function arriveeChoix() {
+    const t = S_.serveur.task; S_.serveur.task = null;
+    if (t) ouvrirChoix(t.table);
+  }
+  function ouvrirChoix(i) {
+    const sv = S_.serveur, c = S_.tables[i].client;
+    if (!c || c.etape !== "choix" || S_.panel) return;
+    if (sv.carry) { msg("Dépose d’abord ton plat !", "", "info", 1.6); return; }
+    S_.panel = { table: i, cmd: c.cmd, focus: 0, clavier: false, feedback: null };
     sv.pose = "idle";
-    S_.panel = { table: i, cmd: c.cmd, wrongs: [], focus: 0, clavier: false };
     if (A.voix) direCommande(c.cmd, true);
   }
 
@@ -277,31 +337,32 @@
   }
 
   function choisir(idx) {
-    const p = S_.panel; if (!p) return;
+    const p = S_.panel; if (!p || p.feedback) return;
     const tb = S_.tables[p.table], c = tb.client, sv = S_.serveur;
     if (!c) { S_.panel = null; return; }
     const choix = p.cmd.choix[idx];
-    S_.panel = null;
     S_.rep++;
     if (choix === p.cmd.bonne) {
-      S_.justes++;
-      sonOk();
-      c.state = "wait";
-      S_.hatchQ.push({ dish: style(p.cmd.couleur).plat, table: p.table });
-      msg("Bravo ! La commande part en cuisine.", "Porte le plat à la table " + (p.table + 1) + ".", "ok", 2.6);
-      sv.task = { type: "goHatch", table: p.table };
-      allerVers(sv, HATCH_STAND.x, HATCH_STAND.y);
+      S_.justes++; S_.panel = null; sonOk();
+      c.etape = "plat";
+      sv.carry = { table: p.table, dish: style(p.cmd.couleur).plat, cuisine: false, sansBonus: false };
+      sv.pose = "content"; sv.poseT = 0.6;
+      msg("Bravo, la bonne assiette !", "Porte-la à la table " + (p.table + 1) + " (regarde ton ticket).", "ok", 2.8);
     } else {
       sonKo();
       S_.erreurs.push({ pronom: p.cmd.pronom, verbe: p.cmd.verbe, bonne: p.cmd.bonne, choisie: choix, regle: p.cmd.regle, niveau: p.cmd.niveau });
       S_.combo = 0;
-      tb.plat = "plat_rate"; tb.platT = 2.4;
-      c.state = "call"; c.tries++;
-      c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
+      c.tries++; c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
       sv.pose = "oups"; sv.poseT = 0.9;
-      fx({ img: "fx_croix", x: tb.x, y: 470, vy: -40, dur: 1.2, scale: 0.28 });
-      messageErreur(p.cmd);
+      fx({ img: "fx_croix", x: HATCH_PLATE.x, y: HATCH_PLATE.y - 70, vy: -40, dur: 1.2, scale: 0.28 });
+      p.feedback = { choisie: choix };         // la correction s'affiche dans le panneau : le joueur lit à son rythme
     }
+  }
+  function reessayer() {                      // mêmes verbe et personne, nouvelles assiettes
+    const p = S_.panel; if (!p || !p.feedback) return;
+    p.cmd = Object.assign({}, p.cmd); p.cmd.choix = VERBES.refaireChoix(p.cmd, rnd);
+    p.feedback = null; p.focus = 0; p.clavier = false; sonClic();
+    if (A.voix) direCommande(p.cmd, true);
   }
 
   function demanderService(i) {
@@ -309,7 +370,7 @@
     if (!sv.carry) return;
     if (serveurOccupe()) return;
     sv.task = { type: "goTable", table: i };
-    allerVers(sv, S_.tables[i].x, Y_COULOIR);
+    allerVers(sv, S_.tables[i].x + STAND_DX, Y_COULOIR);
     sonClic();
   }
 
@@ -317,6 +378,7 @@
     const sv = S_.serveur, tb = S_.tables[i], carry = sv.carry;
     sv.task = null;
     if (!carry) return;
+    sv.dir = 1;
     if (carry.table !== i || !tb.client) {
       sv.pose = "oups"; sv.poseT = 0.9; sonKo();
       msg("Ce n’est pas la bonne table !", "Regarde le numéro sur le ticket : table " + (carry.table + 1) + ".", "bad", 2.6);
@@ -388,7 +450,7 @@
       if (tb.platT > 0) { tb.platT -= dt; if (tb.platT <= 0 && tb.plat === "plat_rate") tb.plat = null; }
       if (c.state === "enter" && c.t > 0.7) { c.state = "call"; c.t = 0; }
       else if (clientAttend(c)) {
-        c.patience -= (dt / c.patSec) * rate;
+        if (!(S_.dial && S_.dial.table === tb.i)) c.patience -= (dt / c.patSec) * rate;       // pendant le dialogue, le client patiente
         if (c.patience <= 0) { c.patience = 0; clientPart(tb, true); }
       } else if (c.state === "eat") {
         if (c.t > 1.4 && PLATS.includes(tb.plat)) tb.plat = "assiette_vide";
@@ -413,7 +475,7 @@
     }
     marcheManuelle(dt);
     // un plat attend au passe-plats : le serveur libre va le chercher (sauf si le joueur marche au clavier)
-    if (G.vue === "salle" && !G.trans && !s.panel && s.hatchQ.length && !sv.carry && !serveurOccupe() && s.fin <= 0 && sv.manuelT > 1.2) {
+    if (G.vue === "salle" && !G.trans && !s.panel && !s.dial && s.hatchQ.length && !sv.carry && !serveurOccupe() && s.fin <= 0 && sv.manuelT > 1.2) {
       sv.task = { type: "goHatch", table: s.hatchQ[0].table };
       allerVers(sv, HATCH_STAND.x, HATCH_STAND.y);
     }
@@ -426,11 +488,11 @@
   }
 
   // Marche au clavier : flèches gauche / droite dans le couloir, Espace (ou Entrée) pour agir à l'endroit où l'on se trouve.
-  const XMIN = 110, XMAX = 1830, PORTEE = 105;
+  const XMIN = 110, XMAX = 1830, PORTEE = 175;
   function marcheManuelle(dt) {
     const sv = S_.serveur, dir = (G.keys.droite ? 1 : 0) - (G.keys.gauche ? 1 : 0);
     sv.manuelT += dt;
-    if (!dir || G.vue !== "salle" || G.trans || S_.panel || G.paused || S_.fin > 0) return;
+    if (!dir || G.vue !== "salle" || G.trans || S_.panel || S_.dial || G.paused || S_.fin > 0) return;
     sv.manuelT = 0; sv.task = null; sv.path = [];                                  // le clavier reprend la main sur un déplacement lancé à la souris
     sv.dir = dir; sv.x = Math.max(XMIN, Math.min(XMAX, sv.x + dir * 640 * dt));
     if (sv.y < Y_COULOIR) sv.y = Math.min(Y_COULOIR, sv.y + 640 * dt);
@@ -442,19 +504,27 @@
     for (const tb of S_.tables) if (tableActive(tb.i) && Math.abs(sv.x - tb.x) < bd) { bd = Math.abs(sv.x - tb.x); best = tb.i; }
     return best;
   }
+  const auPasse = () => { const sv = S_.serveur; return Math.abs(sv.x - HATCH_ZONE.x) < HATCH_ZONE.portee && (sv.y >= Y_COULOIR - 6 || sv.y <= HATCH_STAND.y + 10); };
   function agirSurPlace() {
-    const sv = S_.serveur; if (G.vue !== "salle" || G.trans || S_.panel || S_.fin > 0) return;
+    const sv = S_.serveur; if (G.vue !== "salle" || G.trans || S_.fin > 0) return;
+    if (S_.dial) { avancerDialogue(); return; }
+    if (S_.panel) return;
     if (sv.task || sv.path.length || sv.poseT > 0) return;
     const i = tableProche();
-    if (i < 0) { msg(sv.carry ? "Place-toi devant une table (← →), puis Espace." : "Place-toi devant un client qui lève la main (← →), puis Espace.", "", "info", 2.2); return; }
-    if (sv.carry) { arriveeService(i); return; }
-    const c = S_.tables[i].client;
-    if (c && c.state === "call") arriveePrise(i); else msg("Ce client n’a pas besoin de toi pour l’instant.", "", "info", 1.8);
+    if (i >= 0) {
+      if (sv.carry) { arriveeService(i); return; }
+      const c = S_.tables[i].client;
+      if (c && c.state === "call") { arriveePrise(i); return; }
+    }
+    if (auPasse() && (commandesEnAttente().length || S_.hatchQ.length || sv.carry)) { agirAuPasse(); return; }
+    if (i < 0) msg(sv.carry ? "Place-toi devant une table (← →), puis Espace." : "Place-toi devant un client qui lève la main (← →), puis Espace.", "", "info", 2.2);
+    else msg("Ce client n’a pas besoin de toi pour l’instant.", "", "info", 1.8);
   }
 
   function arrivee() {
     const t = S_.serveur.task; if (!t) return;
     if (t.type === "goOrder") arriveePrise(t.table);
+    else if (t.type === "goChoix") arriveeChoix();
     else if (t.type === "goHatch") arriveeComptoir();
     else if (t.type === "goTable") arriveeService(t.table);
     else if (t.type === "goDoor") { S_.serveur.task = null; changerVue("cuisine"); }
@@ -510,7 +580,7 @@
       const c = tb.client, k = ["smiley_1_ravi", "smiley_2_content", "smiley_3_neutre", "smiley_4_presse", "smiley_5_mecontent", "smiley_6_furieux"][smileyIdx(c.patience)];
       const rebond = A.calme ? 0 : Math.sin(G.t * (c.patience < 0.3 ? 9 : 3) + tb.i) * (c.patience < 0.3 ? 5 : 2);
       const mainG = !img(c.slug + "_appel") || MAIN_GAUCHE.includes(c.slug);      // le smiley se met du côté opposé à la main levée
-      dessiner(k, tb.x + (mainG ? 88 : -88), 470 + rebond, 0.24, 0.24, "centre");
+      dessiner(k, tb.x + (mainG ? 98 : -98), 470 + rebond, 0.24, 0.24, "centre");
     }
     if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 390, 26, "#e8b33f", "center", "#5a3a29");
   }
@@ -525,7 +595,7 @@
     const sprite = img(c.slug + (appel ? "_appel" : "_attente")) || img(c.slug + "_attente");
     const resp = A.calme ? 0 : Math.sin(G.t * 2 + c.bob) * 2;
     if (sprite) {
-      const sc = CLIENT_W / (img(c.slug + "_attente") || sprite).width;
+      const sc = CLIENT_W * (CLIENT_ECH[c.slug] || 1) / (img(c.slug + "_attente") || sprite).width;
       ctx.drawImage(sprite, x - sprite.width * sc / 2, y - sprite.height * sc + resp, sprite.width * sc, sprite.height * sc);
     } else silhouetteClient(x, y + resp, c, appel);
     ctx.restore();
@@ -591,11 +661,12 @@
       const sw = A.calme ? 0 : Math.sin(G.t * 1.5 + k) * 0.015;
       ctx.save(); ctx.translate(x + 50, y); ctx.rotate(sw);
       if (!dessiner("ticket_commande", -50, 0, sc, sc, "haut")) { ctx.fillStyle = "#f6e9cf"; rr(-50, 0, 100, 147, 6); ctx.fill(); }
-      ctx.fillStyle = "#f6e9cf"; ctx.fillRect(-40, 38, 80, 70);
-      texte(t.cmd.pronom, 0, 52, 21, A.contraste ? "#000" : "#5a3a29");
+      ctx.fillStyle = "#f6e9cf"; ctx.fillRect(-40, 34, 80, 88);
+      const pc = PERS_COURT[t.cmd.p], cr = A.contraste ? "#000" : "#5a3a29";
+      texte(pc[0], 0, 46, 16, cr); texte(pc[1], 0, 62, 16, cr);
       const mot = t.cmd.verbe.toUpperCase();
-      texte(mot, 0, 80, Math.max(13, Math.min(21, Math.floor(92 / (mot.length * 0.72)))), A.contraste ? style(t.cmd.couleur).ticketContraste : style(t.cmd.couleur).ticket);   // le verbe doit tenir sur le ticket
-      texte("table " + (t.table + 1), 0, 122, 18, A.contraste ? "#000" : "#7a5a44", "center", null, "normal");
+      texte(mot, 0, 92, Math.max(13, Math.min(21, Math.floor(92 / (mot.length * 0.72)))), A.contraste ? style(t.cmd.couleur).ticketContraste : style(t.cmd.couleur).ticket);   // le verbe doit tenir sur le ticket
+      texte("table " + (t.table + 1), 0, 128, 18, A.contraste ? "#000" : "#7a5a44", "center", null, "normal");
       if (t.cuisine) {                                       // commande à cuisiner : état affiché sous le ticket, ticket choisi encadré
         const st = style(t.cmd.couleur);
         if (G.vue === "cuisine" && ticketSelId() === t.id) { ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 6; rr(-54, -4, 108, 155, 8); ctx.stroke(); ctx.strokeStyle = "#000"; ctx.lineWidth = 2; rr(-58, -8, 116, 163, 10); ctx.stroke(); }
@@ -617,18 +688,40 @@
     for (const t of TERMS) if (f.length > t.length && f.endsWith(t)) return [f.slice(0, -t.length), t];
     return [f, ""];
   }
-  const ECOUTER = { x: PANEL.x + PANEL.w - 210, y: PANEL.y + 16, w: 180, h: 48 };
+  const FEED_BTN = { x: PANEL.x + PANEL.w / 2 - 190, y: PANEL.y + 152, w: 380, h: 50 };
+  const ECOUTER = { x: PANEL.x + PANEL.w - 230, y: PANEL.y + 32, w: 170, h: 42 };
   function dessinerPanneau() {
     const p = S_.panel; if (!p) return;
     ctx.fillStyle = A.contraste ? "rgba(0,0,0,0.65)" : "rgba(30,15,8,0.35)"; ctx.fillRect(0, 0, W, H);
     neuf("panneau_bois", PANEL.x, PANEL.y - 6, PANEL.w, PANEL.h + 12, 36);
     if (A.contraste) { ctx.fillStyle = "#fff"; rr(PANEL.x + 14, PANEL.y + 4, PANEL.w - 28, 70, 14); ctx.fill(); }
-    texte("Table " + (p.table + 1) + " :  « " + pv(p.cmd.pronom, p.cmd.verbe) + " » au passé simple.  Quelle forme ?", PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 40, ts(34), ENCRE());
+    const fb = p.feedback;
+    if (!fb) {
+      const titre = "Passe-plats · table " + (p.table + 1) + " : " + p.cmd.verbe.toUpperCase() + ", " + PERS_LONG[p.cmd.p] + (A.pronom ? " (" + LIBELLE_PERSONNE(p.cmd.p) + ")" : "") + " — quelle assiette ?";
+      let tt = Math.min(ts(30), 34); texte("", 0, 0, tt);
+      while (tt > 20 && ctx.measureText(titre).width > PANEL.w - (voixOk() ? 300 : 120)) { tt -= 2; texte("", 0, 0, tt); }
+      texte(titre, PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 54, tt, ENCRE());
+    } else texte("Oups ! Ce n’était pas la bonne assiette.", PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 54, Math.min(ts(32), 36), A.contraste ? "#b00000" : "#d9473b");
     if (voixOk()) {
       const sur = G.mouse.x > ECOUTER.x && G.mouse.x < ECOUTER.x + ECOUTER.w && G.mouse.y > ECOUTER.y && G.mouse.y < ECOUTER.y + ECOUTER.h;
       ctx.fillStyle = sur ? "#e8b33f" : FOND(); rr(ECOUTER.x, ECOUTER.y, ECOUTER.w, ECOUTER.h, 14); ctx.fill();
       ctx.strokeStyle = ENCRE(); ctx.lineWidth = 4; ctx.stroke();
-      texte("Écouter (L)", ECOUTER.x + ECOUTER.w / 2, ECOUTER.y + ECOUTER.h / 2 + 1, 24, ENCRE());
+      texte("Écouter (L)", ECOUTER.x + ECOUTER.w / 2, ECOUTER.y + ECOUTER.h / 2 + 1, 22, ENCRE());
+    }
+    if (fb) {                                           // la bonne forme et la règle, jamais la forme fautive
+      const cx = PANEL.x + PANEL.w / 2, cmd = p.cmd, r = cmd.regle, notes = [];
+      if (r.circonflexe) notes.push("Accent circonflexe sur le " + r.lettre + " : nous / vous.");
+      if (r.note) notes.push(r.note);
+      const pr = cmd.pronom.charAt(0).toLowerCase() + cmd.pronom.slice(1);
+      texte("Il fallait : " + pv(pr, cmd.bonne), cx, PANEL.y + 98, Math.min(ts(42), 48), A.contraste ? "#006400" : "#4c8c4a");
+      const ligne = r.texte + (notes.length ? "     " + notes.join(" ") : "");
+      let tr = Math.min(ts(24), 28); texte("", 0, 0, tr);
+      while (tr > 16 && ctx.measureText(ligne).width > PANEL.w - 140) { tr -= 1; texte("", 0, 0, tr); }
+      texte(ligne, cx, PANEL.y + 134, tr, ENCRE(), "center", null, "normal");
+      const b = FEED_BTN, sur = dans(b, G.mouse);
+      ctx.fillStyle = sur ? "#e8b33f" : "#4c8c4a"; rr(b.x, b.y, b.w, b.h, 16); ctx.fill(); ctx.strokeStyle = A.contraste ? "#000" : "#5a3a29"; ctx.lineWidth = 5; ctx.stroke();
+      texte("Réessayer (Espace)", b.x + b.w / 2, b.y + b.h / 2 + 2, 28, sur ? "#4a2f22" : "#fff");
+      return;
     }
     // une seule taille de texte pour les 4 propositions (la plus petite qui les fait toutes tenir)
     let taille = ts(46);
@@ -982,7 +1075,7 @@
     const R = rectsSaisie(), st = style(tk.cmd.couleur), cmd = tk.cmd;
     neuf("panneau_bois", PANEL.x, PANEL.y - 6, PANEL.w, PANEL.h + 12, 36);
     if (A.contraste) { ctx.fillStyle = "#fff"; rr(PANEL.x + 14, PANEL.y + 4, PANEL.w - 28, 54, 14); ctx.fill(); }
-    texte(sa.indice || ("Table " + (tk.table + 1) + " :  écris la forme de « " + cmd.verbe + " » au passé simple (accents compris)"), PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 50, Math.min(ts(28), 30), sa.indice ? (A.contraste ? "#b00000" : "#d9473b") : ENCRE());
+    texte(sa.indice || ("Table " + (tk.table + 1) + " :  écris la forme de « " + cmd.verbe + " », " + PERS_LONG[cmd.p] + ", au passé simple"), PANEL.x + PANEL.w / 2 - (voixOk() ? 100 : 0), PANEL.y + 50, Math.min(ts(28), 30), sa.indice ? (A.contraste ? "#b00000" : "#d9473b") : ENCRE());
     if (voixOk()) {
       const sur = dans(ECOUTER_C, G.mouse);
       ctx.fillStyle = sur ? "#e8b33f" : FOND(); rr(ECOUTER_C.x, ECOUTER_C.y, ECOUTER_C.w, ECOUTER_C.h, 14); ctx.fill(); ctx.strokeStyle = ENCRE(); ctx.lineWidth = 4; ctx.stroke();
@@ -992,7 +1085,8 @@
     const b = R.pronom;
     if (A.contraste) { ctx.fillStyle = st.fondContraste; rr(b.x, b.y, b.w, b.h, 20); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 5; ctx.stroke(); }
     else if (!dessiner(st.brique, b.x, b.y, b.w / 384, b.h / 154, "haut")) { ctx.fillStyle = st.fond; rr(b.x, b.y, b.w, b.h, 20); ctx.fill(); }
-    texte(cmd.pronom, b.x + b.w / 2, b.y + b.h / 2 + 2, ts(46), "#fff", "center", A.contraste ? "#000" : st.contour);
+    if (A.pronom) texte(cmd.pronom, b.x + b.w / 2, b.y + b.h / 2 + 2, ts(46), "#fff", "center", A.contraste ? "#000" : st.contour);
+    else { texte(PERS_COURT[cmd.p][0], b.x + b.w / 2, b.y + b.h / 2 - 16, 26, "#fff", "center", A.contraste ? "#000" : st.contour); texte(PERS_COURT[cmd.p][1], b.x + b.w / 2, b.y + b.h / 2 + 18, 26, "#fff", "center", A.contraste ? "#000" : st.contour); }
     const f = R.champ;
     ctx.fillStyle = A.contraste ? "#fff" : "#fffaf0"; rr(f.x, f.y, f.w, f.h, 20); ctx.fill(); ctx.strokeStyle = A.contraste ? "#000" : "#5a3a29"; ctx.lineWidth = 6; ctx.stroke();
     let tz = 58; texte("", 0, 0, tz); while (tz > 28 && ctx.measureText(sa.texte).width > f.w - 70) { tz -= 2; texte("", 0, 0, tz); }
@@ -1062,16 +1156,49 @@
     }
   }
 
-  function dessinerAction() {                      // « Espace » au-dessus de la table où le serveur peut agir
-    if (G.vue !== "salle" || G.trans || S_.panel || G.mode !== "play") return;
+  function pilule(x, y, hw, label, taille) {
+    ctx.fillStyle = "#ffd84a"; rr(x - hw, y - 22, 2 * hw, 44, 14); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 10, y + 22); ctx.lineTo(x + 10, y + 22); ctx.lineTo(x, y + 34); ctx.closePath(); ctx.fill(); ctx.stroke();
+    texte(label, x, y + 1, taille, "#4a2f22");
+  }
+  function dessinerAction() {                      // « Espace » au-dessus de la table (ou du passe-plats) où le serveur peut agir
+    if (G.vue !== "salle" || G.trans || S_.panel || S_.dial || G.mode !== "play") return;
     const sv = S_.serveur; if (sv.task || sv.path.length || sv.poseT > 0) return;
-    const i = tableProche(); if (i < 0) return;
-    const tb = S_.tables[i], c = tb.client;
-    if (!(sv.carry || (c && c.state === "call"))) return;
-    const y = 378 + (A.calme ? 0 : Math.sin(G.t * 6) * 4), hw = sv.carry ? 100 : 62;
-    ctx.fillStyle = "#ffd84a"; rr(tb.x - hw, y - 22, 2 * hw, 44, 14); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(tb.x - 10, y + 22); ctx.lineTo(tb.x + 10, y + 22); ctx.lineTo(tb.x, y + 34); ctx.closePath(); ctx.fill(); ctx.stroke();
-    texte(sv.carry ? "Espace : servir" : "Espace", tb.x, y + 1, sv.carry ? 20 : 26, "#4a2f22");
+    const bob = A.calme ? 0 : Math.sin(G.t * 6) * 4, i = tableProche();
+    if (i >= 0) {
+      const tb = S_.tables[i], c = tb.client;
+      if (sv.carry || (c && c.state === "call")) { pilule(tb.x, 378 + bob, sv.carry ? 100 : 62, sv.carry ? "Espace : servir" : "Espace", sv.carry ? 20 : 26); return; }
+    }
+    if (auPasse() && !sv.carry && (commandesEnAttente().length || S_.hatchQ.length)) pilule(HATCH.x + HATCH_RECT.w / 2, 478 + bob, 128, "Espace : passe-plats", 22);
+  }
+
+  // bulle de dialogue au-dessus de la table : le client parle (bulle crème, avec une pointe vers lui), le serveur répond (bulle verte)
+  function dessinerDialogue() {
+    const d = S_.dial; if (!d || G.vue !== "salle") return;
+    const tb = S_.tables[d.table], L = ligneDialogue(d), serv = L.qui === "serveur";
+    const t1 = ts(30), tg = ts(54), tb2 = ts(24);
+    const lignes = lignesBulle(L.haut, 520, t1);
+    let w = 0; texte("", 0, 0, t1); for (const l of lignes) w = Math.max(w, ctx.measureText(l).width);
+    if (L.gros) { texte("", 0, 0, tg); w = Math.max(w, ctx.measureText(L.gros).width); }
+    if (L.bas) { texte("", 0, 0, tb2); w = Math.max(w, ctx.measureText(L.bas).width); }
+    w = Math.min(640, Math.max(330, w + 70));
+    const h = lignes.length * (t1 + 8) + (L.gros ? tg + 14 : 0) + (L.bas ? tb2 + 10 : 0) + 56;
+    const cx = Math.max(w / 2 + 20, Math.min(W - w / 2 - 20, tb.x)), bas = 410, by = bas - h, bx = cx - w / 2;
+    const fond = serv ? "#e4f1dc" : FOND(), cont = serv ? "#4c8c4a" : "#5a3a29";
+    ctx.save();
+    ctx.fillStyle = fond; rr(bx, by, w, h, 22); ctx.fill(); ctx.strokeStyle = cont; ctx.lineWidth = 6; ctx.stroke();
+    if (!serv) {                                                    // pointe vers le client
+      ctx.beginPath(); ctx.moveTo(tb.x - 22, bas - 3); ctx.lineTo(tb.x + 22, bas - 3); ctx.lineTo(tb.x, bas + 30); ctx.closePath(); ctx.fillStyle = fond; ctx.fill(); ctx.stroke();
+      ctx.fillStyle = fond; ctx.fillRect(tb.x - 19, bas - 8, 38, 9);
+    }
+    ctx.fillStyle = cont; rr(bx + 18, by - 16, serv ? 112 : 92, 30, 12); ctx.fill();
+    texte(serv ? "SERVEUR" : "CLIENT", bx + 18 + (serv ? 56 : 46), by - 1, 19, "#fff");
+    let y = by + 24;
+    for (const l of lignes) { texte(l, cx, y + t1 / 2, t1, ENCRE(), "center", null, "normal"); y += t1 + 8; }
+    if (L.gros) { texte(L.gros, cx, y + tg / 2 + 4, tg, A.contraste ? "#000" : L.couleur, "center", "#fff"); y += tg + 14; }
+    if (L.bas) { texte(L.bas, cx, y + tb2 / 2, tb2, A.contraste ? "#000" : "#7a5a44", "center", null, "normal"); y += tb2 + 10; }
+    texte(d.step < DIAL_N - 1 ? "Espace : suite" : "Espace : j’y vais !", bx + w - 18, by + h - 18, 19, A.contraste ? "#000" : "#7a5a44", "right", null, "normal");
+    ctx.restore();
   }
 
   function dessinerFx() {
@@ -1095,7 +1222,7 @@
   function dessinerTitre() {
     ctx.fillStyle = "rgba(40,20,10,0.55)"; ctx.fillRect(0, 0, W, H);
     texte("Le Resto du Passé Simple", W / 2, 190, 112, "#f6e9cf", "center", "#5a3a29");
-    texte("Sers tes clients en choisissant la bonne forme du passé simple !", W / 2, 285, 40, "#fff", "center", "#5a3a29", "normal");
+    texte("Sers tes clients : trouve au passe-plats l’assiette avec la bonne forme du passé simple !", W / 2, 285, 40, "#fff", "center", "#5a3a29", "normal");
     texte("Vitesse des clients :", W / 2, 360, 34, "#fff", "center", "#5a3a29");
     BTN.normal = bouton(W / 2 - 470, 390, 290, 70, "Normal", G.chrono === "normal", 32);
     BTN.lent = bouton(W / 2 - 145, 390, 290, 70, "Lent", G.chrono === "lent", 32);
@@ -1108,7 +1235,7 @@
     BTN.jouer = bouton(W / 2 - 230, 830, 460, 120, "JOUER", false);
     BTN.reglages = bouton(W - 340, 28, 310, 70, "Réglages (R)", false, 30);
     BTN.cuisine = bouton(30, 28, 400, 70, G.cuisine ? "Cuisine : oui" : "Cuisine : non", !!G.cuisine, 30);
-    texte("Clique sur un client qui lève la main, choisis la forme, puis emmène le plat à la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
+    texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
     if (G.cuisine) texte("Après quelques clients servis sans erreur, la cuisine s’ouvre : tu écris toi-même les plats !", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
   }
   const REGLAGES = [
@@ -1116,6 +1243,7 @@
     { cle: "police", titre: "Police", opts: ["Standard", "Lisible (dyslexie)"] },
     { cle: "contraste", titre: "Contraste", opts: ["Normal", "Élevé"] },
     { cle: "termin", titre: "Terminaison des formes en jaune", opts: ["Non", "Oui"] },
+    { cle: "pronom", titre: "Aide : écrire aussi le pronom (il / elle / on…)", opts: ["Non", "Oui"] },
     { cle: "voix", titre: "Lecture à voix haute automatique", opts: ["Non", "Oui"] },
     { cle: "calme", titre: "Animations", opts: ["Normales", "Calmes"] },
   ];
@@ -1124,15 +1252,15 @@
     texte("Réglages", W / 2, 80, 80, "#f6e9cf", "center", "#5a3a29");
     BTN.reg = [];
     REGLAGES.forEach((r, i) => {
-      const y = 170 + i * 112, n = r.opts.length, w = 300, gap = 30, x0 = W / 2 - (n * w + (n - 1) * gap) / 2;
+      const y = 150 + i * 100, n = r.opts.length, w = 300, gap = 30, x0 = W / 2 - (n * w + (n - 1) * gap) / 2;
       texte(r.titre, W / 2, y, 32, "#fff", "center", "#5a3a29");
-      r.opts.forEach((o, k) => { const b = bouton(x0 + k * (w + gap), y + 24, w, 72, o, A[r.cle] === k, 28); BTN.reg.push(Object.assign(b, { cle: r.cle, val: k })); });
+      r.opts.forEach((o, k) => { const b = bouton(x0 + k * (w + gap), y + 22, w, 64, o, A[r.cle] === k, 28); BTN.reg.push(Object.assign(b, { cle: r.cle, val: k })); });
     });
-    ctx.fillStyle = FOND(); rr(W / 2 - 560, 845, 1120, 78, 18); ctx.fill();
+    ctx.fillStyle = FOND(); rr(W / 2 - 560, 872, 1120, 70, 18); ctx.fill();
     let te = ts(38); texte("", 0, 0, te);
     while (te > 20 && ctx.measureText("Exemple : ils chantèrent / nous mangeâmes").width > 1060) { te -= 2; texte("", 0, 0, te); }
-    texte("Exemple : ils chantèrent / nous mangeâmes", W / 2, 885, te, ENCRE());
-    BTN.retour = bouton(W / 2 - 190, 945, 380, 100, "Retour", false);
+    texte("Exemple : ils chantèrent / nous mangeâmes", W / 2, 908, te, ENCRE());
+    BTN.retour = bouton(W / 2 - 190, 960, 380, 90, "Retour", false);
   }
   function dessinerFin() {
     ctx.fillStyle = "rgba(40,20,10,0.72)"; ctx.fillRect(0, 0, W, H);
@@ -1159,8 +1287,9 @@
     if (enCuisine) dessinerCuisine();
     else {
       // passe-plats et plats prêts
-      dessiner("passe_plats", 300, 300, 0.62, 0.62, "haut");
-      S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = HATCH_PLATE.x + (i - (a.length - 1) / 2) * 72; dessiner(h.dish, x, HATCH_PLATE.y, 0.16, 0.12, "bas"); texte(String(h.table + 1), x + 40, HATCH_PLATE.y - 30, 30, "#fff", "center", "#5a3a29"); });
+      dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
+      if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH.x + 24, HATCH.y + 2, 346, 150, 14); ctx.stroke(); ctx.restore(); }
+      S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = HATCH_PLATE.x + (i - (a.length - 1) / 2) * 96; dessiner(h.dish, x, HATCH_PLATE.y, 0.22, 0.165, "bas"); texte(String(h.table + 1), x + 52, HATCH_PLATE.y - 44, 34, "#fff", "center", "#5a3a29"); });
       dessinerPorteSalle();
       dessinerRail();
       const sv = S_.serveur, derriere = sv.y < 800;
@@ -1168,6 +1297,7 @@
       S_.tables.forEach((tb) => { if (tableActive(tb.i)) dessinerTable(tb); });
       if (!derriere) dessinerServeur();
       dessinerAction();
+      dessinerDialogue();
       dessinerFx();
     }
     dessinerHUD(); if (G.mode === "play") dessinerMessages();
@@ -1199,14 +1329,20 @@
     if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } return; }
     if (G.paused || G.trans) return;
     if (G.vue === "cuisine") { clicCuisine(p); return; }
+    if (S_.dial) { avancerDialogue(); return; }
     if (S_.panel) {
+      if (S_.panel.feedback) { if (dans(FEED_BTN, p)) reessayer(); else if (p.y < PANEL.y - 10) S_.panel = null; return; }
       const n = S_.panel.cmd.choix.length;
       if (voixOk() && dans(ECOUTER, p)) { direCommande(S_.panel.cmd, true); return; }
       for (let i = 0; i < n; i++) { const r = briqueRect(i, n); if (dans(r, p)) { choisir(i); return; } }
-      if (p.y < PANEL.y - 10) { const c = S_.tables[S_.panel.table].client; if (c) c.state = "call"; S_.panel = null; }   // clic hors du panneau : annuler
+      if (p.y < PANEL.y - 10) S_.panel = null;          // clic hors du panneau : on ferme (la commande reste à préparer)
       return;
     }
     if (S_.cuis.ouverte && dans(DOOR, p)) { demanderCuisine(); return; }
+    for (let k = 0; k < S_.tickets.length; k++) {         // clic sur un ticket du rail : aller choisir l'assiette de cette commande
+      if (dans(ticketRect(k), p)) { const t = S_.tickets[k], c = S_.tables[t.table].client; if (c && c.ticket === t.id && c.etape === "choix") demanderChoix(t.table); return; }
+    }
+    if (dans(HATCH_RECT, p) && p.y < 400) { agirAuPasse(); return; }
     for (const tb of S_.tables) {
       if (!tableActive(tb.i)) continue;
       if (Math.abs(p.x - tb.x) < 115 && p.y > 330 && p.y < 830) {
@@ -1218,7 +1354,7 @@
   cv.addEventListener("mousemove", (e) => { G.mouse = pos(e); cv.style.cursor = "pointer"; });
   cv.addEventListener("click", (e) => clic(pos(e)));
   cv.addEventListener("touchend", (e) => { if (e.changedTouches[0]) { const p = pos(e.changedTouches[0]); G.mouse = p; clic(p); e.preventDefault(); } }, { passive: false });
-  function annulerPanneau() { const c = S_.tables[S_.panel.table].client; if (c) c.state = "call"; S_.panel = null; }
+  function annulerPanneau() { S_.panel = null; }
   window.addEventListener("keydown", (e) => {
     const k = e.key;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1250,11 +1386,17 @@
       }
       return;
     }
-    if ((k === "c" || k === "C") && !S_.panel) { demanderCuisine(); return; }
+    if ((k === "c" || k === "C") && !S_.panel && !S_.dial) { demanderCuisine(); return; }
     if ((k === "ArrowLeft" || k === "ArrowRight") && !S_.panel) { e.preventDefault(); return; }
-    if ((k === " " || k === "Enter") && !S_.panel) { e.preventDefault(); agirSurPlace(); return; }
+    if ((k === " " || k === "Enter") && !S_.panel) { e.preventDefault(); if (!e.repeat) agirSurPlace(); return; }
     if (S_.panel) {
       const pn = S_.panel, n = pn.cmd.choix.length;
+      if (pn.feedback) {
+        if (k === "Enter" || k === " ") { e.preventDefault(); if (!e.repeat) reessayer(); }
+        else if (k === "Escape") annulerPanneau();
+        else if (k === "l" || k === "L") direCommande(pn.cmd, false);
+        return;
+      }
       if (/^[1-4]$/.test(k)) { if (+k <= n) choisir(+k - 1); }
       else if (k === "ArrowRight" || k === "ArrowDown") { e.preventDefault(); pn.focus = pn.clavier ? (pn.focus + 1) % n : pn.focus; pn.clavier = true; }
       else if (k === "ArrowLeft" || k === "ArrowUp") { e.preventDefault(); pn.focus = pn.clavier ? (pn.focus + n - 1) % n : pn.focus; pn.clavier = true; }
@@ -1263,7 +1405,7 @@
       else if (k === "Escape") annulerPanneau();
       return;
     }
-    if (/^[1-6]$/.test(k)) { const tb = S_.tables[+k - 1]; if (tb && tableActive(tb.i)) clic({ x: tb.x, y: 600 }); }   // touches 1 à 6 : la table correspondante
+    if (/^[1-6]$/.test(k) && !S_.dial) { const tb = S_.tables[+k - 1]; if (tb && tableActive(tb.i)) clic({ x: tb.x, y: 600 }); }   // touches 1 à 6 : la table correspondante
   });
   const _champ = champ();
   if (_champ) {
@@ -1285,7 +1427,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, BAL, A, sauver, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, BAL, A, sauver, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k]); },
   };
