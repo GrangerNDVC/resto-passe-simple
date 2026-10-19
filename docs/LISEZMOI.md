@@ -12,11 +12,17 @@ Ouvre `index.html` dans un navigateur (Chrome, Edge, Firefox). Aucun serveur n'e
    - le client répond par la **personne** (ex. « À la 3e personne du singulier »). Pendant le dialogue, sa patience est gelée.
    Un ticket (verbe + personne + numéro de table) s'accroche au rail du fond.
 2. **Aller au passe-plats** (dans le mur, à gauche). Le serveur y va tout seul. Au clavier, une flèche reprend la main ; place-toi près du passe-plats et appuie sur Espace. Tu peux aussi cliquer sur le passe-plats ou sur un ticket.
-3. **Choisir la bonne assiette** : chaque assiette porte une forme du verbe au passé simple (touches 1 à 4, flèches + Entrée, ou clic). Si tu te trompes, la bonne forme et la règle s'affichent dans le panneau : lis à ton rythme, puis « Réessayer » (Espace). Échap ferme le choix, la commande reste à préparer.
-4. **Servir la bonne table** : le numéro est sur le ticket (Espace devant la table, ou clic).
-5. Un client dont la patience (smiley) tombe à zéro part fâché : on perd un cœur. Trois cœurs perdus : fin de partie, avec la liste « à revoir ».
+3. **Choisir la bonne assiette** : quatre vraies assiettes glissent hors du passe-plats ; chacune porte une étiquette avec une forme du verbe au passé simple (touches 1 à 4, flèches + Entrée, ou clic). Échap ferme le choix, la commande reste à préparer. **Aucune correction à ce moment-là** : le plat part à la table, même si la forme est fausse.
+4. **Servir la bonne table** : le numéro est sur le ticket (Espace devant la table, ou clic). Si le plat est bon, le client le mange : tu gagnes des pièces (10 + un pourboire qui dépend de sa patience). Sinon, **le client refuse** : « Ce n’est pas le plat que j’ai demandé ! » (forme d’un autre verbe) ou « Ce n’est pas la bonne cuisson ! » (mauvaise forme du bon verbe). L’assiette refusée est enlevée, le serveur retourne tout seul au passe-plats où il ne reste que les autres assiettes. Chaque refus fait perdre de la patience au client et casse ta série ; le pourboire est complet du premier coup, divisé par deux après un refus, nul après deux refus. Au **2e refus**, la bonne forme et la règle s’affichent pour t’aider.
+5. Un client dont la patience (smiley) tombe à zéro part fâché : on perd un cœur. Trois cœurs perdus : fin de partie, avec la liste « à revoir » et de **1 à 3 étoiles** selon la part de clients servis du premier coup (60 % pour 2 étoiles, 85 % pour 3).
 
-Réglages utiles (écran titre → Réglages) : « Aide : écrire aussi le pronom » (il / elle / on…) est activée par défaut ; désactive-la pour que l'élève identifie seul la personne.
+**Accueil** : le jeu s'ouvre sur la façade du bistrot : le serveur arrive, la pancarte « Au passé pas si simple » s'écrit, puis un panneau OUVERT tombe sur la porte : on clique dessus (ou Espace) pour entrer. Un clic passe l'animation ; avec le réglage « Animations : calmes » elle s'affiche directement terminée.
+
+**Guide gourmand** : sur l'écran titre, « Mon resto (N) » permet de baptiser le restaurant (24 lettres max.). En jouant, un article du journal *Le Gourmet du matin* s'affiche (le jeu est figé, Espace / Entrée / clic pour continuer) : « table à retenir » après 5 clients servis, puis **1, 2 et 3 étoiles du guide** après 3, 6 et 10 niveaux franchis, à condition d'avoir servi au moins 70 % des clients du premier coup (sinon l'étoile attend). Les articles sont au passé simple et reprennent trois verbes servis pendant la partie. Le nom et les articles sont mémorisés dans le navigateur ; « Revue de presse » (écran titre) permet de les relire. Les textes sont modifiables dans `js/presse.js`.
+
+**Pause** : bouton « Pause (P) » en haut à droite, ou touche P. Pour reprendre : clic n'importe où, Espace, Entrée, Échap ou P. Le jeu se met aussi en pause si tu quittes l'onglet.
+
+Réglages utiles (écran titre → Réglages) : volume des sons (Coupé / Bas / Normal), musique d'ambiance (Non / Oui), « Aide : écrire aussi le pronom » (il / elle / on…) est activée par défaut ; désactive-la pour que l'élève identifie seul la personne.
 
 ## La cuisine (chantier 4)
 Après **10 clients servis d'affilée sans qu'aucun ne parte fâché**, la cuisine s'ouvre (message d'annonce, porte battante « CUISINE » sur le mur du fond). Ensuite, **6 commandes sur 10** sont « à cuisiner » (les autres restent des QCM en salle) :

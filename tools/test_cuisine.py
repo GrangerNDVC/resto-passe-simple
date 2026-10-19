@@ -32,7 +32,7 @@ with sync_playwright() as p:
     check("titre : et revient sur « oui »", ev("__jeu.G.cuisine") == 1)
 
     # --- 1. la cuisine s'ouvre après N clients servis sans client parti fâché
-    ev("__jeu.BAL.cuisineApres = 2; __jeu.BAL.cuisineProba = 1; __jeu.G.chrono = 'sans'; __jeu.G.groupe = 0; __jeu.start()")
+    ev("__jeu.BAL.cuisineApres = 2; __jeu.BAL.cuisineProba = 1; __jeu.G.chrono = 'sans'; __jeu.G.groupe = 0; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start()")
     check("cuisine fermée au départ", ev("__jeu.S.cuis.ouverte") is False)
     BOT = """() => {
       const J = __jeu, S = J.S; if (!S || J.G.mode !== 'play' || J.G.vue !== 'salle') return;
@@ -158,7 +158,7 @@ with sync_playwright() as p:
     ev("__jeu.G.vue = 'salle'; __jeu.G.trans = null")
 
     # --- 8. partie complète automatique avec un joueur parfait en salle ET en cuisine (mode lent) : aucune erreur, ça avance
-    ev("__jeu.BAL.cuisineApres = 3; __jeu.BAL.cuisineProba = 0.6; __jeu.G.chrono = 'lent'; __jeu.G.duree = 0; __jeu.G.groupe = 0; __jeu.start()")
+    ev("__jeu.BAL.cuisineApres = 3; __jeu.BAL.cuisineProba = 0.6; __jeu.G.chrono = 'lent'; __jeu.G.duree = 0; __jeu.G.groupe = 0; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start()")
     SOAK = """() => {
       const J = __jeu, S = J.S, G = J.G; if (!S || G.mode !== 'play' || G.trans) return;
       const cu = S.cuis;
@@ -193,7 +193,7 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/c13_cuisine_parcours.png")
 
     # --- 9. cuisine désactivée : jamais de commande à cuisiner
-    ev("__jeu.G.cuisine = 0; __jeu.BAL.cuisineApres = 1; __jeu.G.chrono = 'sans'; __jeu.start()")
+    ev("__jeu.G.cuisine = 0; __jeu.BAL.cuisineApres = 1; __jeu.G.chrono = 'sans'; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start()")
     for _ in range(300):
         ev(BOT); ev("__jeu.avancer(0.5)")
         if ev("__jeu.S.servis") >= 6: break

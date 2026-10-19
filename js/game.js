@@ -8,7 +8,8 @@
   // ------------------------------------------------------------------ images
   const IMG = {};
   const LISTE = {
-    bg_salle: "assets/bg_salle.png",
+    bg_salle: "assets/bg_salle.png", bg_titre: "assets/bg_titre.jpg",
+    deco_plante: "assets/salle/deco_plante.png", deco_lampe: "assets/salle/deco_lampe.png", deco_horloge: "assets/salle/deco_horloge.png", deco_ardoise: "assets/salle/deco_ardoise.png",
     chaise: "assets/salle/chaise.png", passe_plats: "assets/salle/passe_plats.png", plaque_numero: "assets/salle/plaque_numero.png",
   };
   const COULEURS = ["rouge", "vert", "jaune", "violet", "orange", "rose"];
@@ -44,7 +45,7 @@
   const TABLE_X = [330, 630, 930, 1230, 1530, 1780];
   const TABLE_TOP = 552;                   // haut du sprite de table
   const ORDRE_OUVERTURE = [2, 3, 1, 4, 0, 5];
-  const CLIENT_CUT_Y = TABLE_TOP + 120 * S;   // bord bas du client, caché derrière la nappe
+  const CLIENT_CUT_Y = TABLE_TOP + 120 * S - 16;   // bord bas du client, caché derrière la nappe
   const Y_COULOIR = 880;                   // pieds du serveur dans le couloir
   const HATCH = { x: 152, y: 172, s: 0.95 };                  // passe-plats : creusé dans le mur du fond (remonté et agrandi au chantier 5)
   const HATCH_RECT = { x: 152, y: 172, w: 440, h: 267 };      // zone cliquable
@@ -83,6 +84,8 @@
     spawnBase: 14, spawnPas: 1.0, spawnServis: 0.08, spawnMin: 5.5,   // délai entre deux clients (s)
     clientsParNiveau: 8,                       // niveau +1 tous les N clients servis
     clientsParTable: 4,                        // une table de plus tous les N clients servis
+    pourboireRefus: [1, 0.5, 0],               // part du pourboire (bonus de rapidité) selon le nombre de plats refusés avant le bon
+    etoiles: [0.6, 0.85],                      // part de clients servis du premier coup pour 2 et 3 étoiles
     penalitePat: 0.2,                          // part de patience perdue à chaque erreur de forme
     coeurTous: 10,                             // un cœur regagné tous les N clients servis (0 = jamais)
     vies: 3,
@@ -111,11 +114,12 @@
   // ------------------------------------------------------------------ état
   let rndSeed = (Date.now() % 2147483646) + 1;
   const rnd = () => (rndSeed = (rndSeed * 16807) % 2147483647) / 2147483647;
-  const G = { keys: { gauche: false, droite: false }, mode: "title", t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
+  const G = { keys: { gauche: false, droite: false }, mode: "accueil", tA: 0, sortie: 0, t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, nom: "Chez Passé Simple", guide: [], lecture: null, saisieNom: "", mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
   let S_ = null;     // état de partie
 
   // ------------------------------------------------------------------ accessibilité : réglages mémorisés dans le navigateur
   const CLE = "resto_passe_simple_reglages_v1";
+  const NOM_DEFAUT = "Chez Passé Simple";
   const TAILLES = [1, 1.15, 1.3];
   const A = { taille: 0, police: 0, contraste: 0, termin: 0, voix: 0, calme: 0, pronom: 1, son: 2, musique: 0 };
   try { if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) A.calme = 1; } catch (e) { /* tant pis */ }
@@ -126,8 +130,10 @@
     if (sv && [0, 3, 5, 10].includes(sv.duree)) G.duree = sv.duree;
     if (sv && [0, 1, 2, 3].includes(sv.groupe)) G.groupe = sv.groupe;
     if (sv && [0, 1].includes(sv.cuisine)) G.cuisine = sv.cuisine;
+    if (sv && typeof sv.nom === "string" && sv.nom.trim()) G.nom = sv.nom.slice(0, 24);
+    if (sv && Array.isArray(sv.guide)) G.guide = sv.guide.filter((a) => a && Number.isInteger(a.id) && Array.isArray(a.v)).slice(0, 4);
   } catch (e) { /* pas de stockage : les réglages ne seront pas mémorisés */ }
-  function sauver() { try { localStorage.setItem(CLE, JSON.stringify({ A, chrono: G.chrono, duree: G.duree, groupe: G.groupe, cuisine: G.cuisine })); } catch (e) { /* ignoré */ } }
+  function sauver() { try { localStorage.setItem(CLE, JSON.stringify({ A, chrono: G.chrono, duree: G.duree, groupe: G.groupe, cuisine: G.cuisine, nom: G.nom, guide: G.guide })); } catch (e) { /* ignoré */ } }
   const ts = (n) => Math.round(n * TAILLES[A.taille]);                 // taille de texte réglable
   const FOND = () => (A.contraste ? "#ffffff" : "#f6e9cf");
   const ENCRE = () => (A.contraste ? "#000000" : "#4a2f22");
@@ -147,7 +153,7 @@
   function nouvellePartie() {
     S_ = {
       score: 0, vies: BAL.vies, servis: 0, niveau: VERBES.GROUPES[G.groupe].debut, spawnT: 0.4, ticketId: 1, fin: 0,
-      seance: G.duree > 0, reste: G.duree * 60, rep: 0, justes: 0, partis: 0,
+      seance: G.duree > 0, reste: G.duree * 60, rep: 0, justes: 0, partis: 0, parfaits: 0, refus: 0, vus: [], article: null,
       tables: TABLE_X.map((x, i) => ({ i, x, client: null, plat: null, platT: 0 })),
       serveur: { x: 330, y: Y_COULOIR, dir: 1, path: [], task: null, pose: "idle", poseT: 0, carry: null, anim: 0, manuelT: 9 },
       tickets: [], panel: null, hatchQ: [], msgs: [], fx: [], erreurs: [], combo: 0, serie: 0, cuisines: 0,
@@ -222,6 +228,30 @@
   }
   setInterval(musiqueTick, 250);
 
+  // ------------------------------------------------------------------ guide gourmand : paliers, articles de presse
+  // Paliers : mention (5 clients servis), puis 1, 2 et 3 étoiles après 3, 6 et 10 niveaux franchis, À CONDITION d'avoir servi
+  // au moins 70 % des clients du premier coup (sinon le palier attend : la précision se rattrape).
+  const GUIDE = { mentionApres: 5, niveaux: [3, 6, 10], precision: 0.7 };
+  const aGagne = (id) => G.guide.some((a) => a.id === id);
+  const sonFanfare = () => [523, 659, 784, 1047].forEach((f, k) => bip(f, 0.4, "triangle", 0.06, k * 0.13));
+  function verbesDeLaPartie() {                         // trois formes servies (et justes) pendant la partie, pour personnaliser l'article
+    const vus = [], vu = new Set();
+    for (let i = S_.vus.length - 1; i >= 0 && vus.length < 3; i--) { const v = S_.vus[i]; if (!vu.has(v.verbe)) { vu.add(v.verbe); vus.push(v.texte); } }
+    while (vus.length < 3) vus.push(PRESSE.PAR_DEFAUT[vus.length]);
+    return vus.reverse();
+  }
+  function verifierGuide() {
+    if (!S_ || S_.article || !S_.servis) return;
+    const suivant = PRESSE.ARTICLES.find((a) => !aGagne(a.id)); if (!suivant) return;
+    const prec = S_.parfaits / S_.servis, niv = S_.niveau - VERBES.GROUPES[G.groupe].debut;
+    const ok = suivant.etoiles === 0 ? S_.servis >= GUIDE.mentionApres : niv >= GUIDE.niveaux[suivant.etoiles - 1] && prec >= GUIDE.precision;
+    if (!ok) return;
+    const v = verbesDeLaPartie();
+    G.guide.push({ id: suivant.id, v, nom: G.nom }); sauver();
+    S_.article = { id: suivant.id, v, nom: G.nom, t: 0 }; sonFanfare();
+  }
+  const nbEtoilesGuide = () => G.guide.filter((a) => a.id >= 1).length;
+
   // ------------------------------------------------------------------ messages et effets
   const pv = (pronom, mot) => pronom + (pronom.endsWith("’") ? "" : " ") + mot;   // « J’aimai », « Tu chantas »
   function msg(texte, sous, kind, dur, note) { S_.msgs.push({ texte, sous: sous || "", note: note || "", kind: kind || "info", t: 0, dur: dur || 2.4 }); if (S_.msgs.length > 2) S_.msgs.shift(); }
@@ -237,13 +267,13 @@
     const looks = { skin: ["#f1c9a5", "#d9a47a", "#a9714c", "#f6d5b5"], shirt: ["#e8b33f", "#4c8c4a", "#d9473b", "#e8833a", "#7b4b94", "#c76b8f"], hair: ["#5a3a29", "#2e2420", "#c9a24a", "#9a9a9a", "#a24a2b"] };
     const pick = (a) => a[Math.floor(rnd() * a.length)];
     const patSec = Math.max(BAL.patMin, BAL.patBase - BAL.patPas * rythme()) * (vip ? 0.8 : 1);
-    table.client = { slug, vip, state: "enter", t: 0, patience: 1, patSec, cmd: null, ticket: null, tries: 0,
+    table.client = { slug, vip, state: "enter", t: 0, patience: 1, patSec, cmd: null, ticket: null, tries: 0, refus: [], corrige: false,
       look: { skin: pick(looks.skin), shirt: vip ? "#333" : pick(looks.shirt), hair: vip ? "#222" : pick(looks.hair) }, bob: rnd() * 6 };
   }
   const clientAttend = (c) => c.state === "call" || c.state === "order" || c.state === "wait";
   function smileyIdx(p) { return p > 0.85 ? 0 : p > 0.65 ? 1 : p > 0.45 ? 2 : p > 0.28 ? 3 : p > 0.12 ? 4 : 5; }
 
-  function libererTable(table) { table.client = null; table.plat = null; table.platT = 0; }
+  function libererTable(table) { table.client = null; table.plat = null; table.platT = 0; table.refusT = 0; table.bulle = null; }
 
   function clientPart(table, colere) {
     const c = table.client; if (!c) return;
@@ -361,7 +391,9 @@
     const sv = S_.serveur, c = S_.tables[i].client;
     if (!c || c.etape !== "choix" || S_.panel) return;
     if (sv.carry) { msg("Dépose d’abord ton plat !", "", "info", 1.6); return; }
-    S_.panel = { table: i, cmd: c.cmd, focus: 0, clavier: false, feedback: null, t0: G.t };
+    const cmd = Object.assign({}, c.cmd, { choix: c.cmd.choix.filter((f) => !c.refus.includes(f)) });          // les assiettes déjà refusées ont été enlevées
+    S_.panel = { table: i, cmd, focus: 0, clavier: false, feedback: null, t0: G.t };
+    if (c.refus.length === 2 && !c.corrige) { c.corrige = true; S_.panel.feedback = { corr: true }; }          // au 2e refus : la bonne forme et la règle
     sv.pose = "idle";
     if (A.voix) direCommande(c.cmd, true);
   }
@@ -386,19 +418,17 @@
       sv.carry = { table: p.table, dish: style(p.cmd.couleur).plat, cuisine: false, sansBonus: false };
       sv.pose = "content"; sv.poseT = 0.6;
       msg("Bravo, la bonne assiette !", "Porte-la à la table " + (p.table + 1) + " (regarde ton ticket).", "ok", 2.8);
-    } else {
-      sonKo();
+    } else {                                  // mauvaise assiette : on ne le dit pas, c'est le client qui réagira à la table
       S_.erreurs.push({ pronom: p.cmd.pronom, verbe: p.cmd.verbe, bonne: p.cmd.bonne, choisie: choix, regle: p.cmd.regle, niveau: p.cmd.niveau });
-      S_.combo = 0;
-      c.tries++; c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
-      sv.pose = "oups"; sv.poseT = 0.9;
-      fx({ img: "fx_croix", x: HATCH_PLATE.x, y: HATCH_PLATE.y - 70, vy: -40, dur: 1.2, scale: 0.28 });
-      p.feedback = { choisie: choix }; p.secT = G.t;         // la correction s'affiche dans le panneau : le joueur lit à son rythme
+      S_.panel = null; sonClic();
+      c.etape = "plat";
+      sv.carry = { table: p.table, dish: style(p.cmd.couleur).plat, cuisine: false, sansBonus: false, mauvais: true, forme: choix };
+      sv.pose = "content"; sv.poseT = 0.6;
+      msg("Porte-la à la table " + (p.table + 1) + " (regarde ton ticket).", "", "info", 2.4);
     }
   }
-  function reessayer() {                      // mêmes verbe et personne, nouvelles assiettes
+  function reessayer() {                      // après la correction : retour aux assiettes restantes
     const p = S_.panel; if (!p || !p.feedback) return;
-    p.cmd = Object.assign({}, p.cmd); p.cmd.choix = VERBES.refaireChoix(p.cmd, rnd);
     p.feedback = null; p.focus = 0; p.clavier = false; p.t0 = G.t; sonClic();
     if (A.voix) direCommande(p.cmd, true);
   }
@@ -423,7 +453,21 @@
       return;
     }
     const c = tb.client;
-    const bonus = carry.sansBonus ? 0 : Math.round(10 * c.patience);
+    if (carry.mauvais) {                      // le client refuse : ce n'est pas ce qu'il a commandé
+      const autre = VERBES.autreVerbe(c.cmd, carry.forme);
+      sv.carry = null; c.refus.push(carry.forme); c.tries++; c.etape = "choix"; S_.refus++; S_.combo = 0;
+      c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
+      tb.plat = carry.dish; tb.refusT = 1.5; sonPlat(); sonKo();
+      tb.bulle = { lignes: autre ? ["Ce n’est pas le plat", "que j’ai demandé !"] : ["Ce n’est pas", "la bonne cuisson !"], t: 0, dur: 2.8 };
+      sv.pose = "oups"; sv.poseT = 0.9;
+      fx({ img: "fx_croix", x: tb.x, y: 470, vy: -40, dur: 1.2, scale: 0.28 });
+      msg("Plat refusé !", "Retourne au passe-plats : il reste d’autres assiettes.", "bad", 3);
+      return;
+    }
+    const nr = c.refus.length, coef = BAL.pourboireRefus[Math.min(nr, BAL.pourboireRefus.length - 1)];
+    const bonus = carry.sansBonus ? 0 : Math.round(10 * c.patience * coef);
+    if (!nr) S_.parfaits++;
+    if (c.cmd) S_.vus.push({ verbe: c.cmd.verbe, texte: pv(c.cmd.pronom.charAt(0).toLowerCase() + c.cmd.pronom.slice(1), c.cmd.bonne) });
     const gain = (10 + bonus) * (c.vip ? 2 : 1) + (S_.combo >= 2 ? 5 : 0) + (carry.cuisine ? BAL.bonusCuisine : 0);
     S_.score += gain; S_.combo++; S_.servis++; S_.serie++;
     sv.carry = null;
@@ -434,6 +478,7 @@
     sonCloche();
     fx({ img: "fx_piece", x: tb.x + 60, y: 500, vy: -80, dur: 1.4, scale: 0.28, texte: "+" + gain });
     if (!A.calme) for (let k = 0; k < 6; k++) { const an = (k / 6) * Math.PI * 2 + 0.4; fx({ img: "fx_etoile", x: tb.x + Math.cos(an) * 20, y: 560 + Math.sin(an) * 10, vx: Math.cos(an) * 170, vy: Math.sin(an) * 140 - 60, dur: 0.8, scale: 0.13 }); }       // étincelles
+    verifierGuide();
     if (BAL.coeurTous && !S_.seance && S_.servis % BAL.coeurTous === 0 && S_.vies < BAL.vies) {
       S_.vies++; fx({ img: "fx_coeur", x: 120, y: 130, vy: -30, dur: 1.4, scale: 0.28 });
       msg("Un cœur de regagné !", "", "ok", 2.2);
@@ -465,6 +510,8 @@
   // ------------------------------------------------------------------ mise à jour
   function update(dt) {
     G.t += dt;
+    if (G.mode === "accueil") { G.tA += dt; if (G.sortie > 0) { G.sortie -= dt; if (G.sortie <= 0) { G.sortie = 0; G.mode = "title"; } } return; }
+    if (S_ && S_.article && G.mode === "play") { S_.article.t += dt; return; }        // l'article de presse fige le jeu
     if (G.mode !== "play") return;
     const s = S_, sv = s.serveur, rate = TEMPS_PAT[G.chrono];
 
@@ -486,6 +533,8 @@
     for (const tb of s.tables) {
       const c = tb.client; if (!c) continue;
       c.t += dt;
+      if (tb.bulle) { tb.bulle.t += dt; if (tb.bulle.t > tb.bulle.dur) tb.bulle = null; }
+      if (tb.refusT > 0) { tb.refusT -= dt; if (tb.refusT <= 0) { tb.plat = null; if (c.etape === "choix" && !S_.panel && !S_.dial) demanderChoix(tb.i); } }     // l'assiette refusée est enlevée, le serveur repart au passe-plats
       if (tb.platT > 0) { tb.platT -= dt; if (tb.platT <= 0 && tb.plat === "plat_rate") tb.plat = null; }
       if (c.state === "enter" && c.t > 0.7) { c.state = "call"; c.t = 0; sonClochette(); }
       else if (clientAttend(c)) {
@@ -622,6 +671,15 @@
       const mainG = !img(c.slug + "_appel") || MAIN_GAUCHE.includes(c.slug);      // le smiley se met du côté opposé à la main levée
       dessiner(k, tb.x + (mainG ? 98 : -98), 470 + rebond, 0.24, 0.24, "centre");
     }
+    if (tb.bulle) {                           // le client parle
+      const b = tb.bulle, a = Math.min(1, b.t / 0.15, (b.dur - b.t) / 0.3), bx = Math.max(165, Math.min(W - 165, tb.x)), by = 372;
+      ctx.save(); ctx.globalAlpha = Math.max(0, a);
+      ctx.fillStyle = "#fff8e8"; rr(bx - 150, by - 40, 300, 84, 18); ctx.fill(); ctx.strokeStyle = "#d9473b"; ctx.lineWidth = 5; ctx.stroke();
+      ctx.fillStyle = "#fff8e8"; ctx.beginPath(); ctx.moveTo(bx - 14, by + 43); ctx.lineTo(bx + 14, by + 43); ctx.lineTo(bx, by + 66); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillRect(bx - 12, by + 38, 24, 8);
+      b.lignes.forEach((l, k) => texte(l, bx, by - 15 + k * 32, 26, "#4a2f22"));
+      ctx.restore();
+    }
     if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 390, 26, "#e8b33f", "center", "#5a3a29");
   }
 
@@ -749,7 +807,7 @@
       let tt = Math.min(ts(30), 34); texte("", 0, 0, tt);
       while (tt > 20 && ctx.measureText(titre).width > PCH.w - (voixOk() ? 300 : 120)) { tt -= 2; texte("", 0, 0, tt); }
       texte(titre, PCH.x + PCH.w / 2 - (voixOk() ? 100 : 0), PCH.y + 54, tt, ENCRE());
-    } else texte("Oups ! Ce n’était pas la bonne assiette.", PCH.x + PCH.w / 2 - (voixOk() ? 100 : 0), PCH.y + 54, Math.min(ts(32), 36), A.contraste ? "#b00000" : "#d9473b");
+    } else texte("Voici la bonne forme, pour t’aider :", PCH.x + PCH.w / 2 - (voixOk() ? 100 : 0), PCH.y + 54, Math.min(ts(32), 36), A.contraste ? "#b00000" : "#d9473b");
     if (voixOk()) {
       const sur = G.mouse.x > ECOUTER.x && G.mouse.x < ECOUTER.x + ECOUTER.w && G.mouse.y > ECOUTER.y && G.mouse.y < ECOUTER.y + ECOUTER.h;
       ctx.fillStyle = sur ? "#e8b33f" : FOND(); rr(ECOUTER.x, ECOUTER.y, ECOUTER.w, ECOUTER.h, 14); ctx.fill();
@@ -768,7 +826,7 @@
       texte(ligne, cx, PCH.y + 172, tr, ENCRE(), "center", null, "normal");
       const b = FEED_BTN, sur = dans(b, G.mouse);
       ctx.fillStyle = sur ? "#e8b33f" : "#4c8c4a"; rr(b.x, b.y, b.w, b.h, 16); ctx.fill(); ctx.strokeStyle = A.contraste ? "#000" : "#5a3a29"; ctx.lineWidth = 5; ctx.stroke();
-      texte("Réessayer (Espace)", b.x + b.w / 2, b.y + b.h / 2 + 2, 28, sur ? "#4a2f22" : "#fff");
+      texte("Continuer (Espace)", b.x + b.w / 2, b.y + b.h / 2 + 2, 28, sur ? "#4a2f22" : "#fff");
       return;
     }
     // les 4 propositions sont de vraies assiettes (celles du groupe) glissant hors du passe-plats ; le mot est écrit sur une étiquette crème bien lisible
@@ -1195,6 +1253,7 @@
       const r = Math.ceil(S_.reste), mm = Math.floor(r / 60), ss = r % 60;
       texte("Temps : " + mm + ":" + (ss < 10 ? "0" : "") + ss, 40, 112, 44, r <= 30 ? (A.contraste ? "#b00000" : "#d9473b") : (A.contraste ? "#000" : "#5a3a29"), "left");
     } else for (let i = 0; i < BAL.vies; i++) { ctx.save(); ctx.globalAlpha = i < S_.vies ? 1 : 0.2; dessiner("fx_coeur", 252 + i * 56, 36, 0.18, 0.18, "haut"); ctx.restore(); }
+    { const n = nbEtoilesGuide(); for (let i = 0; i < 3; i++) { ctx.save(); ctx.globalAlpha = i < n ? 1 : 0.22; dessiner("fx_etoile", 300 + i * 40, 100, 0.1, 0.1, "centre"); ctx.restore(); } }
     texte("Niveau " + S_.niveau + " · " + infoNiveau().titre, 40, hh + 20 - 22, 23, A.contraste ? "#000" : "#6a4a36", "left", null, "normal");
     if (G.mode === "play") {                                         // bouton pause toujours visible
       const b = BTN_PAUSE, sur = dans(b, G.mouse);
@@ -1312,6 +1371,10 @@
     BTN.duree = DUREES.map((d, k) => bouton(W / 2 - 520 + k * 270, 660, 250, 84, d ? "Séance " + d + " min" : "3 cœurs", G.duree === d, 29));
     texte(G.duree ? "Séance : pas de cœurs, tu sers un maximum de clients avant la fin du temps." : "Partie classique : tu as 3 cœurs, un client qui part fâché en coûte un.", W / 2, 775, 28, "#fff", "center", "#5a3a29", "normal");
     BTN.jouer = bouton(W / 2 - 230, 830, 460, 120, "JOUER", false);
+    BTN.nom = bouton(350, 850, 340, 80, "Mon resto (N)", false, 28);
+    texte(G.nom.length > 24 ? G.nom.slice(0, 23) + "…" : G.nom, 520, 955, 26, "#f6e9cf", "center", "#5a3a29");
+    BTN.presse = bouton(1230, 850, 340, 80, "Revue de presse", false, 28);
+    texte(nbEtoilesGuide() + " étoile" + (nbEtoilesGuide() > 1 ? "s" : "") + " sur 3", 1400, 955, 26, "#f6e9cf", "center", "#5a3a29");
     BTN.reglages = bouton(W - 340, 28, 310, 70, "Réglages (R)", false, 30);
     BTN.cuisine = bouton(30, 28, 400, 70, G.cuisine ? "Cuisine : oui" : "Cuisine : non", !!G.cuisine, 30);
     texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
@@ -1350,28 +1413,196 @@
   }
   function dessinerFin() {
     ctx.fillStyle = "rgba(40,20,10,0.72)"; ctx.fillRect(0, 0, W, H);
-    texte(S_.seance ? "Séance terminée !" : "Service terminé !", W / 2, 140, 100, "#f6e9cf", "center", "#5a3a29");
-    texte("Score : " + S_.score + "      Clients servis : " + S_.servis, W / 2, 245, 52, "#fff", "center", "#5a3a29");
-    if (S_.rep) texte("Formes justes : " + S_.justes + " sur " + S_.rep + "  (" + Math.round(100 * S_.justes / S_.rep) + " %)" + (S_.cuisines ? "      Plats cuisinés : " + S_.cuisines : ""), W / 2, 315, 42, "#fff", "center", "#5a3a29", "normal");
+    const part = S_.servis ? S_.parfaits / S_.servis : 0, nbEt = !S_.servis ? 0 : part >= BAL.etoiles[1] ? 3 : part >= BAL.etoiles[0] ? 2 : 1;      // étoiles : clients servis du premier coup
+    texte(S_.seance ? "Séance terminée !" : "Service terminé !", W / 2, 100, 92, "#f6e9cf", "center", "#5a3a29");
+    for (let k = 0; k < 3; k++) { ctx.save(); ctx.globalAlpha = k < nbEt ? 1 : 0.18; if (k >= nbEt) ctx.filter = "grayscale(1)"; dessiner("fx_etoile", W / 2 + (k - 1) * 120, 205, 0.34, 0.34, "centre"); ctx.restore(); }
+    texte("Score : " + S_.score + "      Clients servis : " + S_.servis, W / 2, 300, 50, "#fff", "center", "#5a3a29");
+    if (S_.servis) texte("Servis du premier coup : " + S_.parfaits + " sur " + S_.servis + "      Plats refusés : " + S_.refus, W / 2, 352, 32, "#e8b33f", "center", "#5a3a29", "normal");
+    if (S_.rep) texte("Formes justes : " + S_.justes + " sur " + S_.rep + "  (" + Math.round(100 * S_.justes / S_.rep) + " %)" + (S_.cuisines ? "      Plats cuisinés : " + S_.cuisines : ""), W / 2, 402, 40, "#fff", "center", "#5a3a29", "normal");
     const uniq = []; for (const e of S_.erreurs) if (!uniq.some((u) => u.bonne === e.bonne)) uniq.push(e);
     if (uniq.length) {
-      texte("À revoir :", W / 2, 390, 44, "#e8b33f", "center", "#5a3a29");
-      uniq.slice(0, 5).forEach((e, k) => texte(pv(e.pronom, e.verbe) + "   →   " + pv(e.pronom, e.bonne) + "   (" + e.regle.terminaison + ")", W / 2, 455 + k * 60, 42, "#fff", "center", "#5a3a29"));
-    } else if (S_.rep) texte("Aucune erreur de forme, bravo !", W / 2, 440, 48, "#9be08f", "center", "#5a3a29");
-    else texte("Aucune commande prise cette fois.", W / 2, 440, 44, "#f6e9cf", "center", "#5a3a29", "normal");
+      texte("À revoir :", W / 2, 466, 42, "#e8b33f", "center", "#5a3a29");
+      uniq.slice(0, 5).forEach((e, k) => texte(pv(e.pronom, e.verbe) + "   →   " + pv(e.pronom, e.bonne) + "   (" + e.regle.terminaison + ")", W / 2, 526 + k * 56, 40, "#fff", "center", "#5a3a29"));
+    } else if (S_.rep) texte("Aucune erreur de forme, bravo !", W / 2, 520, 48, "#9be08f", "center", "#5a3a29");
+    else texte("Aucune commande prise cette fois.", W / 2, 520, 44, "#f6e9cf", "center", "#5a3a29", "normal");
     BTN.rejouer = bouton(W / 2 - 230, 840, 460, 120, "REJOUER", false);
+  }
+
+  // ------------------------------------------------------------------ journal : article de presse
+  const PAPIER = { x: 210, y: 50, w: 1500, h: 980 };
+  const BTN_ART = { x: W / 2 - 230, y: 940, w: 460, h: 70 };
+  function mots(par, nom, v) {                     // découpe un paragraphe en mots ; les formes conjuguées sont repérées (hl) et ne se coupent pas
+    const t = par.replace(/\{R\}/g, nom).replace(/\{V(\d)\}/g, (m, d) => "\u0001" + (v[d - 1] || "").replace(/ /g, "\u00a0") + "\u0002");
+    return t.split(" ").map((w) => {
+      const parts = []; let hl = false, cur = "";
+      for (const ch of w) { if (ch === "\u0001" || ch === "\u0002") { if (cur) parts.push({ t: cur, hl }); cur = ""; hl = ch === "\u0001"; } else cur += ch; }
+      if (cur) parts.push({ t: cur, hl });
+      return parts;
+    });
+  }
+  const SERIF = "Georgia, 'Times New Roman', serif";
+  function dessinerArticle(a, bouton_txt) {
+    const art = PRESSE.ARTICLES.find((x) => x.id === a.id); if (!art) return;
+    const nom = a.nom || NOM_DEFAUT, sous = (t) => t.replace(/\{R\}/g, nom);
+    ctx.fillStyle = "rgba(30,15,8,0.8)"; ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    const k = a.t === undefined ? 1 : Math.min(1, a.t / 0.5), e = A.calme ? 1 : 0.92 + 0.08 * k;      // le journal arrive en grossissant
+    ctx.translate(W / 2, H / 2); ctx.scale(e, e); ctx.rotate(A.calme || a.t === undefined ? 0 : (1 - k) * 0.05); ctx.translate(-W / 2, -H / 2);
+    ctx.fillStyle = A.contraste ? "#fff" : "#f4ebd3"; ctx.fillRect(PAPIER.x, PAPIER.y, PAPIER.w, PAPIER.h);
+    ctx.strokeStyle = "#3b2a1e"; ctx.lineWidth = 6; ctx.strokeRect(PAPIER.x + 14, PAPIER.y + 14, PAPIER.w - 28, PAPIER.h - 28);
+    const cx = W / 2, enc = A.contraste ? "#000" : "#2b1d14";
+    const ser = (t, x, y, taille, coul, align, poids) => { ctx.font = (poids || "bold") + " " + taille + "px " + SERIF; ctx.textAlign = align || "center"; ctx.textBaseline = "middle"; ctx.fillStyle = coul || enc; ctx.fillText(t, x, y); };
+    ser(PRESSE.JOURNAL, cx, PAPIER.y + 82, 78, enc);
+    ctx.fillStyle = enc; ctx.fillRect(PAPIER.x + 50, PAPIER.y + 136, PAPIER.w - 100, 4); ctx.fillRect(PAPIER.x + 50, PAPIER.y + 146, PAPIER.w - 100, 2);
+    ser(art.rubrique.toUpperCase() + "   ·   " + (art.etoiles ? "★".repeat(art.etoiles) : "COUP DE CŒUR"), cx, PAPIER.y + 180, 26, "#8a3b1f", "center", "normal");
+    // titre (réduit s'il est trop long)
+    const titre = sous(art.titre); let ft = 64; ctx.font = "bold " + ft + "px " + SERIF; while (ft > 36 && ctx.measureText(titre).width > PAPIER.w - 140) { ft -= 2; ctx.font = "bold " + ft + "px " + SERIF; }
+    ser(titre, cx, PAPIER.y + 252, ft, enc);
+    ser(sous(art.chapeau), cx, PAPIER.y + 316, 28, "#5a3a29", "center", "italic");
+    // corps : mots, passage à la ligne, formes conjuguées mises en valeur
+    const taille = ts(32), inter = Math.round(taille * 1.5), x0 = PAPIER.x + 90, larg = PAPIER.w - 180;
+    let y = PAPIER.y + 396;
+    for (const par of art.paragraphes) {
+      let x = x0; const lignes = [[]]; let cw = 0;
+      const ws = mots(par, nom, a.v);
+      ctx.font = "normal " + taille + "px " + SERIF; const esp = ctx.measureText(" ").width;
+      for (const w of ws) {
+        const lw = w.reduce((s2, p2) => { ctx.font = (p2.hl ? "bold " : "normal ") + taille + "px " + SERIF; return s2 + ctx.measureText(p2.t).width; }, 0);
+        if (cw && cw + esp + lw > larg) { lignes.push([]); cw = 0; }
+        lignes[lignes.length - 1].push({ w, lw, dx: cw ? cw + esp : 0 }); cw = (cw ? cw + esp : 0) + lw;
+      }
+      for (const ln of lignes) {
+        for (const m of ln) {
+          let px = x0 + m.dx;
+          for (const p2 of m.w) {
+            ctx.font = (p2.hl ? "bold " : "normal ") + taille + "px " + SERIF; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+            const wd = ctx.measureText(p2.t).width;
+            if (p2.hl) { ctx.fillStyle = A.contraste ? "#ffe066" : "#f6d56a"; ctx.fillRect(px - 4, y - taille * 0.6, wd + 8, taille * 1.2); }
+            ctx.fillStyle = p2.hl ? (A.contraste ? "#8a0000" : "#a3261c") : enc; ctx.fillText(p2.t, px, y); px += wd;
+          }
+        }
+        y += inter;
+      }
+      y += Math.round(inter * 0.3);
+    }
+    ser("— " + PRESSE.CRITIQUE, PAPIER.x + PAPIER.w - 90, Math.min(y + 6, PAPIER.y + 880), 26, "#5a3a29", "right", "italic");
+    ctx.restore();
+    const pret = a.t === undefined || a.t > 0.8;
+    if (pret) { bouton(BTN_ART.x, BTN_ART.y, BTN_ART.w, BTN_ART.h, bouton_txt, false, 32); }
+  }
+  function dessinerNom() {
+    ctx.fillStyle = "rgba(40,20,10,0.8)"; ctx.fillRect(0, 0, W, H);
+    texte("Comment s’appelle ton restaurant ?", W / 2, 230, 70, "#f6e9cf", "center", "#5a3a29");
+    texte("Ce nom sera écrit dans les articles du journal.", W / 2, 320, 36, "#fff", "center", "#5a3a29", "normal");
+    ctx.fillStyle = "#fffaf0"; rr(W / 2 - 520, 400, 1040, 120, 24); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 6; ctx.stroke();
+    const cur = (!A.calme && Math.floor(G.t * 2) % 2 === 0) ? "|" : " ";
+    texte((G.saisieNom || "") + cur, W / 2, 462, 58, "#4a2f22", "center", null, "bold");
+    texte("Exemples : Chez Marcel · La Toque d’Or · Le Verbe Gourmand", W / 2, 590, 30, "#f6e9cf", "center", "#5a3a29", "normal");
+    BTN.nomOk = bouton(W / 2 - 330, 680, 300, 90, "Valider", false, 36);
+    BTN.nomDef = bouton(W / 2 + 30, 680, 300, 90, "Nom par défaut", false, 28);
+    texte("Entrée : valider      Échap : annuler", W / 2, 830, 28, "#fff", "center", "#5a3a29", "normal");
+  }
+  function dessinerPresse() {
+    ctx.fillStyle = "rgba(40,20,10,0.82)"; ctx.fillRect(0, 0, W, H);
+    texte("Revue de presse", W / 2, 110, 90, "#f6e9cf", "center", "#5a3a29");
+    texte("Les articles que le journal a écrits sur « " + G.nom + " »", W / 2, 195, 36, "#fff", "center", "#5a3a29", "normal");
+    BTN.art = PRESSE.ARTICLES.map((art, i) => {
+      const x = W / 2 - 560, y = 270 + i * 130, w = 1120, h = 108, got = G.guide.find((g) => g.id === art.id), sur = got && dans({ x, y, w, h }, G.mouse);
+      ctx.fillStyle = got ? (sur ? "#e8b33f" : "#f6e9cf") : "rgba(246,233,207,0.25)"; rr(x, y, w, h, 20); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 5; ctx.stroke();
+      if (got) {
+        texte(art.etoiles ? "★".repeat(art.etoiles) : "✎", x + 100, y + h / 2 + 2, 44, "#c98a12", "center", null, "bold");
+        texte(art.titre.replace(/\{R\}/g, got.nom || NOM_DEFAUT), x + 200, y + h / 2 + 2, 34, "#4a2f22", "left");
+      } else {
+        texte(art.etoiles ? "☆".repeat(art.etoiles) : "✎", x + 100, y + h / 2 + 2, 44, "rgba(255,255,255,0.5)", "center");
+        texte(art.etoiles ? "À gagner : " + GUIDE.niveaux[art.etoiles - 1] + " niveaux, au moins " + Math.round(GUIDE.precision * 100) + " % de clients servis du premier coup" : "À gagner : sers " + GUIDE.mentionApres + " clients", x + 200, y + h / 2 + 2, 28, "rgba(255,255,255,0.8)", "left", null, "normal");
+      }
+      return got ? { x, y, w, h, id: art.id } : null;
+    });
+    BTN.presseRetour = bouton(W / 2 - 190, 930, 380, 80, "Retour", false);
+  }
+
+  // ------------------------------------------------------------------ écran d'accueil : le serveur arrive devant le resto
+  const ACCU = {
+    MARCHE: 3.2, ENSEIGNE: 3.9, PANNEAU: 6.4, FIN: 7.2,           // instants (s) : arrivée, pancarte, panneau OUVERT, animation finie
+    SOL: 1010, X0: -150, X1: 690, H: 390,
+    ENS: { x: 959, y: 332, w: 330 },                                // pancarte vierge de l'image (centre, largeur utile)
+    PORTE: { x: 830, y: 610, w: 270, h: 360 },
+    ATTACHE: { x: 960, y: 626 },                                    // clou où le panneau OUVERT est accroché
+    LIGNES: ["Au passé", "pas si simple"],
+  };
+  const panneauRect = () => ({ x: ACCU.ATTACHE.x - 160, y: ACCU.ATTACHE.y + 20, w: 320, h: 130 });
+  const entrerResto = () => { if (G.sortie > 0) return; G.sortie = 0.45; sonClochette(); };
+  function actionAccueil(p) {                                       // clic / Espace : passe l'animation, puis entre
+    if (G.sortie > 0) return;
+    if (G.tA < ACCU.FIN) { G.tA = ACCU.FIN; return; }
+    if (!p || dans(panneauRect(), p) || dans(ACCU.PORTE, p)) entrerResto();
+  }
+  function dessinerAccueil() {
+    const t = G.tA, ease = (u) => 1 - Math.pow(1 - Math.max(0, Math.min(1, u)), 3), sf = "bold %px Georgia, 'Times New Roman', serif";
+    const bg = img("bg_titre");
+    if (bg) ctx.drawImage(bg, 0, 0, W, H); else { ctx.fillStyle = "#f2b774"; ctx.fillRect(0, 0, W, H); }
+    // pancarte : le texte s'écrit lettre par lettre
+    const nTot = ACCU.LIGNES.join("").length, n = t < ACCU.ENSEIGNE ? 0 : Math.min(nTot, Math.floor((t - ACCU.ENSEIGNE) / 0.07));
+    let reste = n; const tailleE = 50;
+    ACCU.LIGNES.forEach((l, i) => {
+      const part = l.slice(0, Math.max(0, Math.min(l.length, reste))); reste -= l.length;
+      if (!part) return;
+      ctx.font = sf.replace("%", tailleE); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const full = ctx.measureText(l).width, x0 = ACCU.ENS.x - full / 2; ctx.textAlign = "left";
+      ctx.lineWidth = 7; ctx.strokeStyle = "#3b2415"; ctx.lineJoin = "round"; ctx.strokeText(part, x0, ACCU.ENS.y - 26 + i * 56);
+      ctx.fillStyle = "#f6d56a"; ctx.fillText(part, x0, ACCU.ENS.y - 26 + i * 56);
+    });
+    const finE = ACCU.ENSEIGNE + nTot * 0.07;
+    if (!A.calme && t > finE && t < finE + 0.9) {                       // petits éclats quand la pancarte est écrite
+      for (let i = 0; i < 4; i++) { const a = (t - finE) / 0.9; ctx.save(); ctx.globalAlpha = 1 - a; dessiner("fx_etoile", ACCU.ENS.x - 170 + i * 113, ACCU.ENS.y - 60 - a * 30 + (i % 2) * 90, 0.09, 0.09, "centre"); ctx.restore(); }
+    }
+    // le serveur arrive, s'arrête, puis se réjouit
+    const marche = t < ACCU.MARCHE;
+    const sx = marche ? ACCU.X0 + (ACCU.X1 - ACCU.X0) * (t / ACCU.MARCHE) : ACCU.X1;
+    const k = marche ? "serveur_marche_" + (1 + (Math.floor(t * 10) % 6)) : t < ACCU.ENSEIGNE ? "serveur_idle" : "serveur_content";
+    const sp = img(k) || img("serveur_idle");
+    if (sp) {
+      const h = ACCU.H, w = sp.width * h / sp.height, bob = A.calme ? 0 : marche ? Math.abs(Math.sin(t * 10)) * -7 : Math.sin(t * 2) * -2;
+      ctx.fillStyle = "rgba(60,30,20,0.25)"; ctx.beginPath(); ctx.ellipse(sx, ACCU.SOL, 70, 14, 0, 0, 7); ctx.fill();
+      ctx.drawImage(sp, sx - w / 2, ACCU.SOL - h + bob, w, h);
+    }
+    // panneau OUVERT : il tombe sur la porte, se balance, et attend un clic
+    if (t >= ACCU.PANNEAU) {
+      const u = (t - ACCU.PANNEAU) / 0.8, chute = A.calme ? 0 : (1 - ease(u)) * -340 + (u < 1 ? 0 : 0), rebond = A.calme || u < 1 ? 0 : Math.sin((t - ACCU.PANNEAU - 0.8) * 2) * 0.06 * Math.exp(-(t - ACCU.PANNEAU - 0.8) * 0.4);
+      const r = panneauRect(), sur = dans(r, G.mouse) && t >= ACCU.FIN, pulse = A.calme || t < ACCU.FIN ? 1 : 1 + 0.03 * Math.sin(t * 4);
+      ctx.save(); ctx.translate(ACCU.ATTACHE.x, ACCU.ATTACHE.y + chute); ctx.rotate(rebond); ctx.scale(pulse, pulse);
+      ctx.strokeStyle = "#3b2415"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-90, 20); ctx.lineTo(0, 0); ctx.lineTo(90, 20); ctx.stroke();
+      ctx.fillStyle = "#c9a227"; ctx.beginPath(); ctx.arc(0, 0, 10, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = sur ? "#e8b33f" : "#4c8c4a"; rr(-160, 20, 320, 130, 22); ctx.fill(); ctx.strokeStyle = "#3b2415"; ctx.lineWidth = 7; ctx.stroke();
+      ctx.strokeStyle = "#f6e9cf"; ctx.lineWidth = 3; rr(-148, 32, 296, 106, 16); ctx.stroke();
+      ctx.font = sf.replace("%", 62); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = sur ? "#3b2415" : "#fff"; ctx.fillText("OUVERT", 0, 70);
+      ctx.font = "bold 26px 'Trebuchet MS', Verdana, sans-serif"; ctx.fillStyle = sur ? "#3b2415" : "#f6e9cf"; ctx.fillText("clique pour entrer", 0, 117);
+      ctx.restore();
+    }
+    if (t >= ACCU.FIN) texte("Clique sur le panneau pour entrer   (ou Espace)", W / 2, 1046, 34, "#fff", "center", "#5a3a29");
+    else if (t > 0.6) texte("Clique pour passer l’animation", W / 2, 1046, 26, "rgba(255,255,255,0.85)", "center", "#5a3a29", "normal");
+    if (G.sortie > 0) { ctx.fillStyle = "rgba(30,15,8," + (1 - G.sortie / 0.45).toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
   }
 
   // ------------------------------------------------------------------ rendu
   function rendre() {
     ctx.clearRect(0, 0, W, H);
+    if (G.mode === "accueil") { dessinerAccueil(); return; }
     const enCuisine = !!S_ && G.vue === "cuisine" && (G.mode === "play" || G.mode === "over");
     if (!enCuisine && !dessiner("bg_salle", 0, 0, W / (img("bg_salle") ? img("bg_salle").width : W), H / (img("bg_salle") ? img("bg_salle").height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (G.mode === "title") { dessinerTitre(); return; }
     if (G.mode === "settings") { dessinerReglages(); return; }
+    if (G.mode === "nom") { dessinerNom(); return; }
+    if (G.mode === "presse") { dessinerPresse(); return; }
+    if (G.mode === "lecture") { dessinerArticle(G.lecture, "Fermer (Échap)"); return; }
     if (!S_) return;
     if (enCuisine) dessinerCuisine();
     else {
+      if (img("deco_plante")) {                                          // déco d'ambiance sur le mur et dans le coin
+        dessiner("deco_plante", 100, 640, 0.34, 0.34, "bas");
+        dessiner("deco_lampe", 1195 - img("deco_lampe").width * 0.4 / 2, 34, 0.4, 0.4, "haut");
+        dessiner("deco_horloge", 1810 - img("deco_horloge").width * 0.4 / 2, 92, 0.4, 0.4, "haut");
+      }
       // passe-plats et plats prêts
       dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
       if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH.x + 27, HATCH.y + 2, 387, 168, 14); ctx.stroke(); ctx.restore(); }
@@ -1389,6 +1620,7 @@
     dessinerHUD(); if (G.mode === "play") dessinerMessages();
     if (enCuisine) dessinerSaisie(); else dessinerPanneau();
     if (G.paused) dessinerPause();
+    if (S_.article && G.mode === "play") dessinerArticle(S_.article, "Continuer (Espace)");
     if (G.mode === "over") dessinerFin();
     if (G.trans) { const a = Math.max(0, 1 - Math.abs(G.trans.t - 0.22) / 0.22); ctx.fillStyle = "rgba(30,15,8," + a.toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
   }
@@ -1397,6 +1629,7 @@
   function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
   const dans = (b, p) => b && p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h;
   function clic(p) {
+    if (G.mode === "accueil") { actionAccueil(p); return; }
     if (G.mode === "title") {
       if (dans(BTN.normal, p)) { G.chrono = "normal"; sauver(); } else if (dans(BTN.lent, p)) { G.chrono = "lent"; sauver(); } else if (dans(BTN.sans, p)) { G.chrono = "sans"; sauver(); }
       else if (BTN.groupe && BTN.groupe.some((b, k) => dans(b, p) && (G.groupe = k) >= 0)) { sauver(); sonClic(); }
@@ -1404,8 +1637,21 @@
       else if (dans(BTN.reglages, p)) { G.mode = "settings"; sonClic(); }
       else if (dans(BTN.cuisine, p)) { G.cuisine = G.cuisine ? 0 : 1; sauver(); sonClic(); }
       else if (dans(BTN.jouer, p)) { nouvellePartie(); sonClic(); }
+      else if (dans(BTN.nom, p)) { ouvrirNom(); sonClic(); }
+      else if (dans(BTN.presse, p)) { G.mode = "presse"; sonClic(); }
       return;
     }
+    if (G.mode === "nom") {
+      if (dans(BTN.nomOk, p)) validerNom(); else if (dans(BTN.nomDef, p)) { G.saisieNom = NOM_DEFAUT; validerNom(); }
+      return;
+    }
+    if (G.mode === "presse") {
+      const a = (BTN.art || []).find((b) => b && dans(b, p));
+      if (a) { G.lecture = Object.assign({}, G.guide.find((g) => g.id === a.id)); G.mode = "lecture"; sonClic(); }
+      else if (dans(BTN.presseRetour, p)) { G.mode = "title"; sonClic(); }
+      return;
+    }
+    if (G.mode === "lecture") { if (dans(BTN_ART, p)) { G.mode = "presse"; sonClic(); } return; }
     if (G.mode === "settings") {
       const b = (BTN.reg || []).find((b) => dans(b, p));
       if (b) { A[b.cle] = b.val; sauver(); sonClic(); if (b.cle === "voix" && b.val === 1) dire("Lecture à voix haute activée."); }
@@ -1413,6 +1659,7 @@
       return;
     }
     if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } return; }
+    if (S_ && S_.article) { if (S_.article.t > 0.8) fermerArticle(); return; }
     if (G.paused) { G.paused = false; sonClic(); return; }                   // n'importe quel clic reprend la partie
     if (G.trans) return;
     if (dans(BTN_PAUSE, p)) { G.paused = true; return; }
@@ -1443,6 +1690,15 @@
   cv.addEventListener("click", (e) => clic(pos(e)));
   cv.addEventListener("touchend", (e) => { if (e.changedTouches[0]) { const p = pos(e.changedTouches[0]); G.mouse = p; clic(p); e.preventDefault(); } }, { passive: false });
   function annulerPanneau() { S_.panel = null; }
+  function fermerArticle() { S_.article = null; sonClic(); }
+  function ouvrirNom() {
+    G.mode = "nom"; G.saisieNom = G.nom; const c = champ();
+    if (c) { c.maxLength = 24; c.value = G.nom; c.focus(); c.select(); }
+  }
+  function validerNom() {
+    const n = (G.saisieNom || "").replace(/\s+/g, " ").trim().slice(0, 24);
+    G.nom = n || NOM_DEFAUT; sauver(); G.mode = "title"; sonClic(); const c = champ(); if (c) { c.blur(); c.maxLength = 20; }
+  }
   window.addEventListener("keydown", (e) => {
     const k = e.key;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1457,6 +1713,16 @@
       else { const c = champ(); if (c && document.activeElement !== c) c.focus(); }
       return;
     }
+    if (G.mode === "accueil") { if (k === "Enter" || k === " ") { e.preventDefault(); actionAccueil(null); } return; }
+    if (G.mode === "nom") {                                           // saisie du nom du resto (le champ caché reçoit les lettres)
+      if (k === "Enter") { e.preventDefault(); validerNom(); }
+      else if (k === "Escape") { e.preventDefault(); G.mode = "title"; const c = champ(); if (c) { c.blur(); c.maxLength = 20; } }
+      else { const c = champ(); if (c && document.activeElement !== c) c.focus(); }
+      return;
+    }
+    if (G.mode === "presse") { if (k === "Escape" || k === "Enter") { e.preventDefault(); G.mode = "title"; } return; }
+    if (G.mode === "lecture") { if (k === "Escape" || k === "Enter" || k === " ") { e.preventDefault(); G.mode = "presse"; } return; }
+    if (G.mode === "play" && S_ && S_.article) { if (k === " " || k === "Enter" || k === "Escape") { e.preventDefault(); if (S_.article.t > 0.8) fermerArticle(); } return; }
     if (k === "ArrowLeft") G.keys.gauche = true;
     if (k === "ArrowRight") G.keys.droite = true;
     if (k === "p" || k === "P") { if (G.mode === "play") G.paused = !G.paused; return; }
@@ -1464,6 +1730,7 @@
     if (G.mode === "title") {
       if (k === "Enter" || k === " ") { e.preventDefault(); nouvellePartie(); sonClic(); }
       else if (k === "r" || k === "R") { G.mode = "settings"; }
+      else if (k === "n" || k === "N") { e.preventDefault(); ouvrirNom(); }
       return;
     }
     if (G.mode === "settings") { if (k === "Escape" || k === "Enter") { e.preventDefault(); G.mode = "title"; } return; }
@@ -1502,7 +1769,7 @@
   });
   const _champ = champ();
   if (_champ) {
-    _champ.addEventListener("input", () => { if (S_ && S_.cuis.saisie) majTexte(_champ.value.toLowerCase().replace(/[^a-zàâäçéèêëîïôöùûüœ]/g, "")); });
+    _champ.addEventListener("input", () => { if (G.mode === "nom") { G.saisieNom = _champ.value.replace(/[^A-Za-zÀ-ÿŒœ0-9 ’'\-]/g, "").slice(0, 24); _champ.value = G.saisieNom; return; } if (S_ && S_.cuis.saisie) majTexte(_champ.value.toLowerCase().replace(/[^a-zàâäçéèêëîïôöùûüœ]/g, "")); });
     _champ.addEventListener("blur", () => { setTimeout(() => { if (S_ && G.mode === "play" && G.vue === "cuisine" && S_.cuis.saisie && !G.paused) _champ.focus(); }, 30); });
   }
   window.addEventListener("keyup", (e) => { if (e.key === "ArrowLeft") G.keys.gauche = false; if (e.key === "ArrowRight") G.keys.droite = false; });
@@ -1520,7 +1787,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, BAL, A, sauver, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, ACCU, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k]); },
   };

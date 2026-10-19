@@ -308,7 +308,12 @@
     return melanger([cmd.bonne].concat(distracteurs(v, cmd.p, cmd.niveau, 3, rnd)), rnd);
   }
 
-  const api = { conj, nouvelleCommande, refaireChoix, regle, fautes, distracteurs, VERBES, PRONOMS, NIVEAUX, NIVEAU_MAX, GROUPES, END, FIN };
+  // La forme refusée est-elle celle d'un AUTRE verbe (« pas le plat demandé ») ou une mauvaise forme du bon verbe (« pas la bonne cuisson ») ?
+  function autreVerbe(cmd, forme) {
+    return (CONFUSIONS[cmd.verbe] || []).some((inf) => { const v = trouver(inf); return v && conj(v, "ps", cmd.p) === forme; });
+  }
+
+  const api = { autreVerbe, conj, nouvelleCommande, refaireChoix, regle, fautes, distracteurs, VERBES, PRONOMS, NIVEAUX, NIVEAU_MAX, GROUPES, END, FIN };
   (typeof window !== "undefined" ? window : globalThis).VERBES = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
