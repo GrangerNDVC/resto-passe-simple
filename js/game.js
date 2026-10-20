@@ -87,8 +87,11 @@
     pourboireRefus: [1, 0.5, 0],               // part du pourboire (bonus de rapidité) selon le nombre de plats refusés avant le bon
     etoiles: [0.6, 0.85],                      // part de clients servis du premier coup pour 2 et 3 étoiles
     penalitePat: 0.2,                          // part de patience perdue à chaque erreur de forme
-    coeurTous: 10,                             // un cœur regagné tous les N clients servis (0 = jamais)
-    vies: 3,
+    // Barre de réputation (remplace les cœurs) : 0 = partie perdue, 100 = succès de presse (étoile du guide + article)
+    repuDepart: 40, repuApresSucces: 55,
+    repuServi: [3, 1, 0],                      // gain selon le nombre de plats refusés avant le bon (+ jusqu'à 2 points selon la patience restante si 0 refus)
+    repuRefus: -4,                             // à chaque plat refusé
+    repuFache: -12,                            // client parti fâché
     tablesDepart: 2,                           // tables ouvertes au début de la partie (max 6)
     // Cuisine (chantier 4) — réglages de départ, à ajuster après les essais en classe
     cuisineApres: 10,                          // la cuisine s'ouvre après N clients servis d'affilée (aucun client parti fâché entre-temps)
@@ -152,7 +155,7 @@
 
   function nouvellePartie() {
     S_ = {
-      score: 0, vies: BAL.vies, servis: 0, niveau: VERBES.GROUPES[G.groupe].debut, spawnT: 0.4, ticketId: 1, fin: 0,
+      score: 0, repu: BAL.repuDepart, repuAff: BAL.repuDepart, servis: 0, niveau: VERBES.GROUPES[G.groupe].debut, spawnT: 0.4, ticketId: 1, fin: 0,
       seance: G.duree > 0, reste: G.duree * 60, rep: 0, justes: 0, partis: 0, parfaits: 0, refus: 0, vus: [], article: null,
       tables: TABLE_X.map((x, i) => ({ i, x, client: null, plat: null, platT: 0 })),
       serveur: { x: 330, y: Y_COULOIR, dir: 1, path: [], task: null, pose: "idle", poseT: 0, carry: null, anim: 0, manuelT: 9 },
@@ -231,8 +234,13 @@
   // ------------------------------------------------------------------ guide gourmand : paliers, articles de presse
   // Paliers : mention (5 clients servis), puis 1, 2 et 3 étoiles après 3, 6 et 10 niveaux franchis, À CONDITION d'avoir servi
   // au moins 70 % des clients du premier coup (sinon le palier attend : la précision se rattrape).
-  const GUIDE = { mentionApres: 5, niveaux: [3, 6, 10], precision: 0.7 };
+  const GUIDE = { mentionApres: 5 };
   const aGagne = (id) => G.guide.some((a) => a.id === id);
+  function changerRepu(d, x, y) {                          // réputation du resto, entre 0 et 100
+    const avant = S_.repu; S_.repu = Math.max(0, Math.min(100, S_.repu + d));
+    if (d && x !== undefined) fx({ img: d > 0 ? "fx_etoile" : "fx_croix", x, y, vy: -50, dur: 1.2, scale: 0.12, texte: (d > 0 ? "+" : "") + Math.round(S_.repu - avant) });
+    if (S_.repu <= 0 && !S_.seance && !S_.fin) S_.fin = 1.4;
+  }
   const sonFanfare = () => [523, 659, 784, 1047].forEach((f, k) => bip(f, 0.4, "triangle", 0.06, k * 0.13));
   function verbesDeLaPartie() {                         // trois formes servies (et justes) pendant la partie, pour personnaliser l'article
     const vus = [], vu = new Set();
@@ -243,9 +251,9 @@
   function verifierGuide() {
     if (!S_ || S_.article || !S_.servis) return;
     const suivant = PRESSE.ARTICLES.find((a) => !aGagne(a.id)); if (!suivant) return;
-    const prec = S_.parfaits / S_.servis, niv = S_.niveau - VERBES.GROUPES[G.groupe].debut;
-    const ok = suivant.etoiles === 0 ? S_.servis >= GUIDE.mentionApres : niv >= GUIDE.niveaux[suivant.etoiles - 1] && prec >= GUIDE.precision;
+    const ok = suivant.etoiles === 0 ? S_.servis >= GUIDE.mentionApres : S_.repu >= 100;       // une étoile = réputation au maximum
     if (!ok) return;
+    if (suivant.etoiles > 0) S_.repu = BAL.repuApresSucces;
     const v = verbesDeLaPartie();
     G.guide.push({ id: suivant.id, v, nom: G.nom }); sauver();
     S_.article = { id: suivant.id, v, nom: G.nom, t: 0 }; sonFanfare();
@@ -286,15 +294,8 @@
     if (colere) {
       S_.combo = 0; S_.partis++; S_.serie = 0;
       c.state = "leave"; c.t = 0; c.angry = true; sonKo();
-      if (S_.seance) {                       // séance : pas de cœurs, on compte seulement les clients partis
-        fx({ img: "fx_croix", x: table.x, y: 470, vy: -40, dur: 1.2, scale: 0.28 });
-        msg("Un client est parti sans être servi.", "", "bad", 2.2);
-      } else {
-        S_.vies--;
-        fx({ img: "fx_coeur", x: table.x, y: 470, vy: -60, dur: 1.4, scale: 0.28 });
-        msg("Un client est parti fâché !", "", "bad", 2.2);
-        if (S_.vies <= 0) { S_.fin = 1.4; }
-      }
+      changerRepu(BAL.repuFache, table.x, 470);
+      msg(S_.seance ? "Un client est parti sans être servi." : "Un client est parti fâché !", "La réputation du resto baisse.", "bad", 2.4);
     } else { c.state = "leave"; c.t = 0; }
   }
 
@@ -455,13 +456,19 @@
     const c = tb.client;
     if (carry.mauvais) {                      // le client refuse : ce n'est pas ce qu'il a commandé
       const autre = VERBES.autreVerbe(c.cmd, carry.forme);
-      sv.carry = null; c.refus.push(carry.forme); c.tries++; c.etape = "choix"; S_.refus++; S_.combo = 0;
+      sv.carry = null; c.refus.push(carry.forme); c.tries++; S_.refus++; S_.combo = 0;
       c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
       tb.plat = carry.dish; tb.refusT = 1.5; sonPlat(); sonKo();
-      tb.bulle = { lignes: autre ? ["Ce n’est pas le plat", "que j’ai demandé !"] : ["Ce n’est pas", "la bonne cuisson !"], t: 0, dur: 2.8 };
+      const pc = PERS_COURT[c.cmd.p];                                   // le client refuse, puis répète sa demande
+      tb.bulle = { lignes: (autre ? ["Ce n’est pas le plat", "que j’ai demandé !"] : ["Ce n’est pas", "la bonne cuisson !"]).concat(["Je voulais « " + c.cmd.verbe + " »,", pc[0] + " " + pc[1]]), t: 0, dur: 4.6 };
       sv.pose = "oups"; sv.poseT = 0.9;
-      fx({ img: "fx_croix", x: tb.x, y: 470, vy: -40, dur: 1.2, scale: 0.28 });
-      msg("Plat refusé !", "Retourne au passe-plats : il reste d’autres assiettes.", "bad", 3);
+      changerRepu(BAL.repuRefus, tb.x, 470);
+      if (A.voix) dire(tb.bulle.lignes.join(" "));
+      if (carry.cuisine) {                                              // plat écrit à la main : il faut le refaire en cuisine
+        c.etape = "cuisine"; const tk = ticketPar(c.ticket); if (tk) tk.etat = "attente";
+        if (c.refus.length === 2 && !c.corrige) { c.corrige = true; messageErreur(c.cmd); }
+        else msg("Plat refusé !", "Retourne en cuisine (touche C) : le ticket est de nouveau à cuisiner.", "bad", 3.4);
+      } else { c.etape = "choix"; msg("Plat refusé !", "Retourne au passe-plats : il reste d’autres assiettes.", "bad", 3); }
       return;
     }
     const nr = c.refus.length, coef = BAL.pourboireRefus[Math.min(nr, BAL.pourboireRefus.length - 1)];
@@ -478,11 +485,8 @@
     sonCloche();
     fx({ img: "fx_piece", x: tb.x + 60, y: 500, vy: -80, dur: 1.4, scale: 0.28, texte: "+" + gain });
     if (!A.calme) for (let k = 0; k < 6; k++) { const an = (k / 6) * Math.PI * 2 + 0.4; fx({ img: "fx_etoile", x: tb.x + Math.cos(an) * 20, y: 560 + Math.sin(an) * 10, vx: Math.cos(an) * 170, vy: Math.sin(an) * 140 - 60, dur: 0.8, scale: 0.13 }); }       // étincelles
+    changerRepu(BAL.repuServi[Math.min(nr, BAL.repuServi.length - 1)] + (nr ? 0 : Math.round(2 * c.patience)), tb.x - 60, 500);
     verifierGuide();
-    if (BAL.coeurTous && !S_.seance && S_.servis % BAL.coeurTous === 0 && S_.vies < BAL.vies) {
-      S_.vies++; fx({ img: "fx_coeur", x: 120, y: 130, vy: -30, dur: 1.4, scale: 0.28 });
-      msg("Un cœur de regagné !", "", "ok", 2.2);
-    }
     if (S_.servis % BAL.clientsParNiveau === 0) {
       S_.niveau++;
       const n = S_.niveau <= VERBES.GROUPES[G.groupe].fin ? VERBES.NIVEAUX[S_.niveau] : null;
@@ -503,7 +507,7 @@
     const e = S_.hatchQ.find((h) => h.table === t.table) || S_.hatchQ[0];
     if (!e) return;
     S_.hatchQ = S_.hatchQ.filter((h) => h !== e);
-    sv.carry = { table: e.table, dish: e.dish, cuisine: !!e.cuisine, sansBonus: !!e.sansBonus };
+    sv.carry = { table: e.table, dish: e.dish, cuisine: !!e.cuisine, sansBonus: !!e.sansBonus, mauvais: !!e.mauvais, forme: e.forme };
     sonCloche();
   }
 
@@ -513,6 +517,7 @@
     if (G.mode === "accueil") { G.tA += dt; if (G.sortie > 0) { G.sortie -= dt; if (G.sortie <= 0) { G.sortie = 0; G.mode = "title"; } } return; }
     if (S_ && S_.article && G.mode === "play") { S_.article.t += dt; return; }        // l'article de presse fige le jeu
     if (G.mode !== "play") return;
+    if (S_) S_.repuAff += (S_.repu - S_.repuAff) * Math.min(1, dt * 4);
     const s = S_, sv = s.serveur, rate = TEMPS_PAT[G.chrono];
 
     if (s.fin > 0) { s.fin -= dt; if (s.fin <= 0) G.mode = "over"; }
@@ -674,10 +679,11 @@
     if (tb.bulle) {                           // le client parle
       const b = tb.bulle, a = Math.min(1, b.t / 0.15, (b.dur - b.t) / 0.3), bx = Math.max(165, Math.min(W - 165, tb.x)), by = 372;
       ctx.save(); ctx.globalAlpha = Math.max(0, a);
-      ctx.fillStyle = "#fff8e8"; rr(bx - 150, by - 40, 300, 84, 18); ctx.fill(); ctx.strokeStyle = "#d9473b"; ctx.lineWidth = 5; ctx.stroke();
+      const nl = b.lignes.length, hb = 20 + nl * 32, hy = by + 44 - hb;
+      ctx.fillStyle = "#fff8e8"; rr(bx - 165, hy, 330, hb, 18); ctx.fill(); ctx.strokeStyle = "#d9473b"; ctx.lineWidth = 5; ctx.stroke();
       ctx.fillStyle = "#fff8e8"; ctx.beginPath(); ctx.moveTo(bx - 14, by + 43); ctx.lineTo(bx + 14, by + 43); ctx.lineTo(bx, by + 66); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.fillRect(bx - 12, by + 38, 24, 8);
-      b.lignes.forEach((l, k) => texte(l, bx, by - 15 + k * 32, 26, "#4a2f22"));
+      b.lignes.forEach((l, k) => texte(l, bx, hy + 26 + k * 32, 25, k < 2 ? "#b3261e" : "#4a2f22"));
       ctx.restore();
     }
     if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 390, 26, "#e8b33f", "center", "#5a3a29");
@@ -977,7 +983,7 @@
     if (!rep) return;
     if (rep === bonne) {
       S_.rep++; S_.justes++; sonOk();
-      Object.assign(po, { etat: "cuit", t: 0, dur: BAL.cuisson[sa.poste], ticketId: tk.id, table: tk.table, dish: style(cmd.couleur).plat, cmd, sansBonus: !!tk.aide });
+      Object.assign(po, { etat: "cuit", t: 0, dur: BAL.cuisson[sa.poste], ticketId: tk.id, table: tk.table, dish: style(cmd.couleur).plat, cmd, sansBonus: !!tk.aide, mauvais: false, forme: null });
       tk.etat = "cuisson"; sonCuisson();
       fermerSaisie();
       chefDit("bravo", "Bravo, c’est la bonne forme ! Ça cuit…", 3.5);
@@ -988,19 +994,17 @@
       bip(440, 0.12, "triangle"); chefDit("explique", "Presque ! Il manque ou il y a un accent de trop. Regarde bien la terminaison.", 5);
       return;
     }
-    S_.rep++; sonKo();
+    S_.rep++;                                // mauvaise forme : le plat cuit quand même, c'est le client qui le refusera à table
     S_.erreurs.push({ pronom: cmd.pronom, verbe: cmd.verbe, bonne: cmd.bonne, choisie: rep, regle: cmd.regle, niveau: cmd.niveau });
-    S_.combo = 0;
-    const c = S_.tables[tk.table].client;
-    if (c) c.patience = Math.max(0.06, c.patience - BAL.penalitePat);
-    Object.assign(po, { etat: "rate", t: 0, dur: BAL.rateDuree, ticketId: tk.id, table: tk.table, dish: "plat_rate", cmd });
+    Object.assign(po, { etat: "cuit", t: 0, dur: BAL.cuisson[sa.poste], ticketId: tk.id, table: tk.table, dish: style(cmd.couleur).plat, cmd, sansBonus: !!tk.aide, mauvais: true, forme: rep });
+    tk.etat = "cuisson"; sonCuisson();
     fermerSaisie();
-    chefDit("fache", "Raté ! " + cmd.regle.court + ". Le poste est en nettoyage, puis tu recommences.", 6);
-    messageErreur(cmd);
+    chefDit("neutre", "Ça cuit… on verra ce qu’en dira le client !", 3.5);
   }
 
   function servirDuPoste(po) {
-    S_.hatchQ.push({ dish: po.dish, table: po.table, cuisine: true, sansBonus: po.sansBonus });
+    S_.hatchQ.push({ dish: po.dish, table: po.table, cuisine: true, sansBonus: po.sansBonus, mauvais: !!po.mauvais, forme: po.forme });
+    po.mauvais = false; po.forme = null;
     S_.cuisines++; S_.cuis.cloche = 0.9; sonCloche();
     Object.assign(po, { etat: "repos", t: 0, ticketId: null, table: -1, dish: null, cmd: null });
     chefDit("bravo", "Le plat part au passe-plats. Retourne en salle : le serveur le porte à la table !", 5);
@@ -1244,6 +1248,14 @@
   // ------------------------------------------------------------------ interface
   const BTN_PAUSE = { x: W - 214, y: 20, w: 184, h: 56 };
   const BTN_REPRENDRE = { x: W / 2 - 330, y: H / 2 + 10, w: 660, h: 100 };
+  function barreRepu(x, y, w, h) {                  // jauge de réputation : rouge → vert, avec l'étoile du succès de presse au bout
+    const v = Math.max(0, Math.min(100, S_.repuAff)) / 100, col = v < 0.2 ? "#d9473b" : v < 0.45 ? "#e8833a" : v < 0.75 ? "#e8b33f" : "#6cb04a";
+    ctx.fillStyle = "rgba(90,58,41,0.25)"; rr(x, y, w, h, h / 2); ctx.fill();
+    if (v > 0.01) { ctx.save(); rr(x, y, w, h, h / 2); ctx.clip(); ctx.fillStyle = col; ctx.fillRect(x, y, Math.max(h, w * v), h); ctx.fillStyle = "rgba(255,255,255,0.28)"; ctx.fillRect(x, y + 4, Math.max(h, w * v), h / 3); ctx.restore(); }
+    ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; rr(x, y, w, h, h / 2); ctx.stroke();
+    if (v >= 0.95 && !A.calme) { ctx.save(); ctx.globalAlpha = 0.5 + 0.5 * Math.sin(G.t * 8); dessiner("fx_etoile", x + w - 6, y + h / 2, 0.11, 0.11, "centre"); ctx.restore(); } else dessiner("fx_etoile", x + w - 6, y + h / 2, 0.11, 0.11, "centre");
+    texte("Réputation", x, y + h + 18, 18, A.contraste ? "#000" : "#6a4a36", "left", null, "normal");
+  }
   function dessinerHUD() {
     const dur = S_ && S_.seance, hh = dur ? 150 : 130;
     ctx.fillStyle = A.contraste ? "#ffffff" : "rgba(246,233,207,0.94)"; rr(24, 20, 410, hh, 22); ctx.fill();
@@ -1252,8 +1264,9 @@
     if (S_.seance) {                      // séance : le temps restant remplace les cœurs
       const r = Math.ceil(S_.reste), mm = Math.floor(r / 60), ss = r % 60;
       texte("Temps : " + mm + ":" + (ss < 10 ? "0" : "") + ss, 40, 112, 44, r <= 30 ? (A.contraste ? "#b00000" : "#d9473b") : (A.contraste ? "#000" : "#5a3a29"), "left");
-    } else for (let i = 0; i < BAL.vies; i++) { ctx.save(); ctx.globalAlpha = i < S_.vies ? 1 : 0.2; dessiner("fx_coeur", 252 + i * 56, 36, 0.18, 0.18, "haut"); ctx.restore(); }
-    { const n = nbEtoilesGuide(); for (let i = 0; i < 3; i++) { ctx.save(); ctx.globalAlpha = i < n ? 1 : 0.22; dessiner("fx_etoile", 300 + i * 40, 100, 0.1, 0.1, "centre"); ctx.restore(); } }
+    }
+    barreRepu(212, 34, 206, 34);
+    { const n = nbEtoilesGuide(); for (let i = 0; i < 3; i++) { ctx.save(); ctx.globalAlpha = i < n ? 1 : 0.22; dessiner("fx_etoile", 342 + i * 38, 100, 0.1, 0.1, "centre"); ctx.restore(); } }
     texte("Niveau " + S_.niveau + " · " + infoNiveau().titre, 40, hh + 20 - 22, 23, A.contraste ? "#000" : "#6a4a36", "left", null, "normal");
     if (G.mode === "play") {                                         // bouton pause toujours visible
       const b = BTN_PAUSE, sur = dans(b, G.mouse);
@@ -1368,8 +1381,8 @@
     texte("Verbes :", W / 2, 500, 34, "#fff", "center", "#5a3a29");
     BTN.groupe = [0, 1, 2, 3].map((g, k) => bouton(W / 2 - 520 + k * 270, 530, 250, 70, g ? VERBES.GROUPES[g].titre : "Tous les verbes", G.groupe === g, 27));
     texte("Type de partie :", W / 2, 632, 34, "#fff", "center", "#5a3a29");
-    BTN.duree = DUREES.map((d, k) => bouton(W / 2 - 520 + k * 270, 660, 250, 84, d ? "Séance " + d + " min" : "3 cœurs", G.duree === d, 29));
-    texte(G.duree ? "Séance : pas de cœurs, tu sers un maximum de clients avant la fin du temps." : "Partie classique : tu as 3 cœurs, un client qui part fâché en coûte un.", W / 2, 775, 28, "#fff", "center", "#5a3a29", "normal");
+    BTN.duree = DUREES.map((d, k) => bouton(W / 2 - 520 + k * 270, 660, 250, 84, d ? "Séance " + d + " min" : "Réputation", G.duree === d, 29));
+    texte(G.duree ? "Séance : pas de cœurs, tu sers un maximum de clients avant la fin du temps." : "Partie classique : garde une bonne réputation ! À zéro, c’est perdu ; au maximum, c’est un succès de presse.", W / 2, 775, 28, "#fff", "center", "#5a3a29", "normal");
     BTN.jouer = bouton(W / 2 - 230, 830, 460, 120, "JOUER", false);
     BTN.nom = bouton(350, 850, 340, 80, "Mon resto (N)", false, 28);
     texte(G.nom.length > 24 ? G.nom.slice(0, 23) + "…" : G.nom, 520, 955, 26, "#f6e9cf", "center", "#5a3a29");
@@ -1514,7 +1527,7 @@
         texte(art.titre.replace(/\{R\}/g, got.nom || NOM_DEFAUT), x + 200, y + h / 2 + 2, 34, "#4a2f22", "left");
       } else {
         texte(art.etoiles ? "☆".repeat(art.etoiles) : "✎", x + 100, y + h / 2 + 2, 44, "rgba(255,255,255,0.5)", "center");
-        texte(art.etoiles ? "À gagner : " + GUIDE.niveaux[art.etoiles - 1] + " niveaux, au moins " + Math.round(GUIDE.precision * 100) + " % de clients servis du premier coup" : "À gagner : sers " + GUIDE.mentionApres + " clients", x + 200, y + h / 2 + 2, 28, "rgba(255,255,255,0.8)", "left", null, "normal");
+        texte(art.etoiles ? "À gagner : remplis la barre de réputation" : "À gagner : sers " + GUIDE.mentionApres + " clients", x + 200, y + h / 2 + 2, 28, "rgba(255,255,255,0.8)", "left", null, "normal");
       }
       return got ? { x, y, w, h, id: art.id } : null;
     });
