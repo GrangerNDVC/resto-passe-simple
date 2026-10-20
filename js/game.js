@@ -1382,10 +1382,10 @@
     BTN.groupe = [0, 1, 2, 3].map((g, k) => bouton(W / 2 - 520 + k * 270, 530, 250, 70, g ? VERBES.GROUPES[g].titre : "Tous les verbes", G.groupe === g, 27));
     texte("Type de partie :", W / 2, 632, 34, "#fff", "center", "#5a3a29");
     BTN.duree = DUREES.map((d, k) => bouton(W / 2 - 520 + k * 270, 660, 250, 84, d ? "Séance " + d + " min" : "Réputation", G.duree === d, 29));
-    texte(G.duree ? "Séance : pas de cœurs, tu sers un maximum de clients avant la fin du temps." : "Partie classique : garde une bonne réputation ! À zéro, c’est perdu ; au maximum, c’est un succès de presse.", W / 2, 775, 28, "#fff", "center", "#5a3a29", "normal");
+    texte(G.duree ? "Séance : seul le temps compte, tu sers un maximum de clients avant la fin." : "Partie classique : garde une bonne réputation ! À zéro, c’est perdu ; au maximum, c’est un succès de presse.", W / 2, 775, 28, "#fff", "center", "#5a3a29", "normal");
     BTN.jouer = bouton(W / 2 - 230, 830, 460, 120, "JOUER", false);
-    BTN.nom = bouton(350, 850, 340, 80, "Mon resto (N)", false, 28);
-    texte(G.nom.length > 24 ? G.nom.slice(0, 23) + "…" : G.nom, 520, 955, 26, "#f6e9cf", "center", "#5a3a29");
+    BTN.nom = bouton(400, 850, 300, 80, "Mon resto (N)", false, 28);
+    texte(G.nom.length > 24 ? G.nom.slice(0, 23) + "…" : G.nom, 550, 955, 26, "#f6e9cf", "center", "#5a3a29");
     BTN.presse = bouton(1230, 850, 340, 80, "Revue de presse", false, 28);
     texte(nbEtoilesGuide() + " étoile" + (nbEtoilesGuide() > 1 ? "s" : "") + " sur 3", 1400, 955, 26, "#f6e9cf", "center", "#5a3a29");
     BTN.reglages = bouton(W - 340, 28, 310, 70, "Réglages (R)", false, 30);
