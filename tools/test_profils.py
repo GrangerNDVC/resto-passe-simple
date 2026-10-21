@@ -47,14 +47,14 @@ PROFILS = [
 ]
 
 def jouer(pg, cfg, duree_seance=0):
-    pg.evaluate("(d) => { __jeu.G.chrono = '%s'; __jeu.G.duree = d;" % CHRONO + " __jeu.start(); window.__bot = null; }", duree_seance)
+    pg.evaluate("(d) => { __jeu.G.libre = true; __jeu.G.chrono = '%s'; __jeu.G.duree = d;" % CHRONO + " __jeu.start(); window.__bot = null; }", duree_seance)
     if OVERRIDES: pg.evaluate("(o) => Object.assign(__jeu.BAL, o)", OVERRIDES)
     if cfg: pg.evaluate(BOT, cfg)
     t = 0.0
     while t < MAX and pg.evaluate("__jeu.G.mode") == "play":
         pg.evaluate("(a) => { for (let i = 0; i < 20; i++) { if (window.__bot) __bot.tick(1/20); __jeu.update(1/20); } }", 0)
         t += 1.0
-    S = pg.evaluate("({servis: __jeu.S.servis, niveau: __jeu.S.niveau, vies: __jeu.S.vies, score: __jeu.S.score, rep: __jeu.S.rep, justes: __jeu.S.justes, partis: __jeu.S.partis, mode: __jeu.G.mode})")
+    S = pg.evaluate("({servis: __jeu.S.servis, niveau: __jeu.S.niveau, repu: __jeu.S.repu, score: __jeu.S.score, rep: __jeu.S.rep, justes: __jeu.S.justes, partis: __jeu.S.partis, mode: __jeu.G.mode})")
     S["duree"] = t
     return S
 
@@ -70,8 +70,8 @@ with sync_playwright() as p:
     for nom, cfg in PROFILS:
         r = jouer(pg, cfg)
         fin = "toujours en jeu" if r["mode"] == "play" else "partie terminée"
-        print("%-34s %5.0f s (%4.1f min)  servis %3d  niveau %d  vies %d  réussite %s  [%s]" % (
-            nom, r["duree"], r["duree"] / 60, r["servis"], r["niveau"], r["vies"],
+        print("%-34s %5.0f s (%4.1f min)  servis %3d  niveau %d  repu %d  réussite %s  [%s]" % (
+            nom, r["duree"], r["duree"] / 60, r["servis"], r["niveau"], r["repu"],
             ("%d %%" % round(100 * r["justes"] / r["rep"])) if r["rep"] else "-", fin))
     print("\n== Mode séance 5 min ==")
     for nom, cfg in (PROFILS if SEANCE else []):

@@ -9,6 +9,9 @@
   const IMG = {};
   const LISTE = {
     bg_salle: "assets/bg_salle.png", bg_titre: "assets/bg_titre.jpg",
+    // facultatifs (chantier 7d) : façades, salles et carte des restos 2 à 4 ; absents, le jeu teinte les images du village
+    bg_carte: "assets/bg_carte.jpg", bg_titre_2: "assets/bg_titre_2.jpg", bg_titre_3: "assets/bg_titre_3.jpg", bg_titre_4: "assets/bg_titre_4.jpg",
+    bg_salle_2: "assets/bg_salle_2.png", bg_salle_3: "assets/bg_salle_3.png", bg_salle_4: "assets/bg_salle_4.png",
     deco_plante: "assets/salle/deco_plante.png", deco_lampe: "assets/salle/deco_lampe.png", deco_horloge: "assets/salle/deco_horloge.png", deco_ardoise: "assets/salle/deco_ardoise.png",
     chaise: "assets/salle/chaise.png", passe_plats: "assets/salle/passe_plats.png", plaque_numero: "assets/salle/plaque_numero.png",
   };
@@ -114,10 +117,27 @@
   const style = (couleur) => STYLE[couleur] || STYLE.g1;
   const PLATS = Object.keys(STYLE).map((k) => STYLE[k].plat);                // 0 = partie classique (cœurs), sinon séance en minutes
 
+  // ------------------------------------------------------------------ la campagne (chantier 7b) : 4 restaurants
+  // groupes : verbes proposés (null = tous) ; debut/fin : niveaux de verbes ; coef : multiplicateur de pièces ; tint : teinte provisoire des images du village
+  const RESTOS = [
+    { id: 0, titre: "Bistrot de village", lieu: "Petit village de campagne", enseigne: ["Au passé", "pas si simple"], groupes: [1], debut: 1, fin: 5, tablesDepart: 2, tablesMax: 4, coef: 1, contenu: "1er groupe", tint: null, facade: "bg_titre", salle: "bg_salle" },
+    { id: 1, titre: "Brasserie de la ville", lieu: "La ville", enseigne: ["La Brasserie", "du Passé"], groupes: [1, 2], debut: 6, fin: 6, tablesDepart: 3, tablesMax: 5, coef: 1.5, contenu: "2e groupe + rappel du 1er", tint: "#a9cbb8", facade: "bg_titre_2", salle: "bg_salle_2" },
+    { id: 2, titre: "Grand restaurant", lieu: "La grande ville", enseigne: ["Le Grand", "Passé Simple"], groupes: [1, 2, 3], debut: 7, fin: 9, tablesDepart: 4, tablesMax: 6, coef: 2, contenu: "3e groupe + rappel", tint: "#c3b0dc", facade: "bg_titre_3", salle: "bg_salle_3" },
+    { id: 3, titre: "Le Palace", lieu: "La capitale", enseigne: ["LE PALACE", "du Passé Simple"], groupes: [1, 2, 3], debut: 10, fin: 10, tablesDepart: 5, tablesMax: 6, coef: 3, contenu: "Tous les groupes, irréguliers", tint: "#f0d27a", facade: "bg_titre_4", salle: "bg_salle_4" },
+  ];
+  const campVide = () => ({ argent: 0, restos: RESTOS.map((R, i) => ({ ouvert: i === 0, reussi: false, etoiles: 0, argent: 0, meilleur: 0 })) });
+  function campLire(o) {                                         // lecture prudente de la sauvegarde
+    const c = campVide(), n = (v, max) => (Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0);
+    if (!o || !Array.isArray(o.restos)) return c;
+    c.argent = n(o.argent, 1e9);
+    RESTOS.forEach((R, i) => { const r = o.restos[i]; if (r && typeof r === "object") c.restos[i] = { ouvert: i === 0 || !!r.ouvert, reussi: !!r.reussi, etoiles: n(r.etoiles, 3), argent: n(r.argent, 1e9), meilleur: n(r.meilleur, 1e9) }; });
+    return c;
+  }
+
   // ------------------------------------------------------------------ état
   let rndSeed = (Date.now() % 2147483646) + 1;
   const rnd = () => (rndSeed = (rndSeed * 16807) % 2147483647) / 2147483647;
-  const G = { keys: { gauche: false, droite: false }, mode: "accueil", tA: 0, sortie: 0, t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, nom: "Chez Passé Simple", guide: [], lecture: null, saisieNom: "", mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
+  const G = { keys: { gauche: false, droite: false }, mode: "accueil", tA: 0, sortie: 0, t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, nom: "Chez Passé Simple", guide: [], camp: campVide(), resto: 0, accueilResto: 0, accueilSuite: "carte", libre: false, carteSel: 0, carteMsg: null, resetT: 0, retourDe: "title", lecture: null, saisieNom: "", mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
   let S_ = null;     // état de partie
 
   // ------------------------------------------------------------------ accessibilité : réglages mémorisés dans le navigateur
@@ -134,9 +154,12 @@
     if (sv && [0, 1, 2, 3].includes(sv.groupe)) G.groupe = sv.groupe;
     if (sv && [0, 1].includes(sv.cuisine)) G.cuisine = sv.cuisine;
     if (sv && typeof sv.nom === "string" && sv.nom.trim()) G.nom = sv.nom.slice(0, 24);
+    if (sv && sv.camp) G.camp = campLire(sv.camp);
+    if (sv && Number.isInteger(sv.resto) && sv.resto >= 0 && sv.resto < RESTOS.length && G.camp.restos[sv.resto].ouvert) G.resto = sv.resto;
+    G.carteSel = G.resto;
     if (sv && Array.isArray(sv.guide)) G.guide = sv.guide.filter((a) => a && Number.isInteger(a.id) && Array.isArray(a.v)).slice(0, 4);
   } catch (e) { /* pas de stockage : les réglages ne seront pas mémorisés */ }
-  function sauver() { try { localStorage.setItem(CLE, JSON.stringify({ A, chrono: G.chrono, duree: G.duree, groupe: G.groupe, cuisine: G.cuisine, nom: G.nom, guide: G.guide })); } catch (e) { /* ignoré */ } }
+  function sauver() { try { localStorage.setItem(CLE, JSON.stringify({ A, chrono: G.chrono, duree: G.duree, groupe: G.groupe, cuisine: G.cuisine, nom: G.nom, guide: G.guide, camp: G.camp, resto: G.resto })); } catch (e) { /* ignoré */ } }
   const ts = (n) => Math.round(n * TAILLES[A.taille]);                 // taille de texte réglable
   const FOND = () => (A.contraste ? "#ffffff" : "#f6e9cf");
   const ENCRE = () => (A.contraste ? "#000000" : "#4a2f22");
@@ -153,9 +176,16 @@
     dire(t);
   }
 
+  function ctxResto() {                                         // contenu de la partie : un resto de la campagne, ou l'entraînement libre
+    if (!G.libre) return RESTOS[G.resto];
+    const gr = VERBES.GROUPES[G.groupe];
+    return { id: -1, libre: true, titre: "Entraînement libre", groupes: G.groupe ? [G.groupe] : null, debut: gr.debut, fin: gr.fin, tablesDepart: BAL.tablesDepart, tablesMax: 6, coef: 1, contenu: gr.titre };
+  }
   function nouvellePartie() {
+    const cx = ctxResto();
     S_ = {
-      score: 0, repu: BAL.repuDepart, repuAff: BAL.repuDepart, servis: 0, niveau: VERBES.GROUPES[G.groupe].debut, spawnT: 0.4, ticketId: 1, fin: 0,
+      ctx: cx, succes: 0,
+      score: 0, repu: BAL.repuDepart, repuAff: BAL.repuDepart, servis: 0, niveau: cx.debut, spawnT: 0.4, ticketId: 1, fin: 0,
       seance: G.duree > 0, reste: G.duree * 60, rep: 0, justes: 0, partis: 0, parfaits: 0, refus: 0, vus: [], article: null,
       tables: TABLE_X.map((x, i) => ({ i, x, client: null, plat: null, platT: 0 })),
       serveur: { x: 330, y: Y_COULOIR, dir: 1, path: [], task: null, pose: "idle", poseT: 0, carry: null, anim: 0, manuelT: 9 },
@@ -169,12 +199,12 @@
     G.mode = "play"; G.vue = "salle"; G.trans = null; if (champ()) champ().blur();
     msg("Marche avec ← →, puis Espace pour agir", "1. Prends la commande   2. Va au passe-plats choisir la bonne assiette   3. Sers la bonne table. La souris marche aussi.", "info", 8);
   }
-  const nbTables = () => Math.min(6, BAL.tablesDepart + Math.floor(S_.servis / BAL.clientsParTable));
+  const nbTables = () => Math.min(S_.ctx.tablesMax, S_.ctx.tablesDepart + Math.floor(S_.servis / BAL.clientsParTable));
   const tableActive = (i) => ORDRE_OUVERTURE.indexOf(i) < nbTables();
   // niveau de verbes : borné par le dernier niveau du groupe choisi (le niveau de jeu, lui, continue de monter : clients plus pressés)
-  const niveauVerbes = () => Math.min(VERBES.GROUPES[G.groupe].fin, S_.niveau);
+  const niveauVerbes = () => Math.min(S_.ctx.fin, S_.niveau);
   const infoNiveau = () => VERBES.NIVEAUX[niveauVerbes()];
-  const rythme = () => S_.niveau - VERBES.GROUPES[G.groupe].debut + 1;      // 1 au départ, quel que soit le groupe choisi
+  const rythme = () => S_.niveau - S_.ctx.debut + 1;      // 1 au départ, quel que soit le groupe choisi
 
   // ------------------------------------------------------------------ sons (synthétisés : aucun fichier, aucune licence)
   // Rien ne démarre avant une action du joueur (règle des navigateurs) : le contexte audio n'est créé qu'au premier son demandé.
@@ -234,7 +264,7 @@
   // ------------------------------------------------------------------ guide gourmand : paliers, articles de presse
   // Paliers : mention (5 clients servis), puis 1, 2 et 3 étoiles après 3, 6 et 10 niveaux franchis, À CONDITION d'avoir servi
   // au moins 70 % des clients du premier coup (sinon le palier attend : la précision se rattrape).
-  const GUIDE = { mentionApres: 5 };
+  const GUIDE = { mentionApres: 5, bonusSucces: 50 };
   const aGagne = (id) => G.guide.some((a) => a.id === id);
   function changerRepu(d, x, y) {                          // réputation du resto, entre 0 et 100
     const avant = S_.repu; S_.repu = Math.max(0, Math.min(100, S_.repu + d));
@@ -248,15 +278,33 @@
     while (vus.length < 3) vus.push(PRESSE.PAR_DEFAUT[vus.length]);
     return vus.reverse();
   }
+  function publier(id) {
+    const v = verbesDeLaPartie();
+    G.guide.push({ id, v, nom: G.nom }); sauver();
+    S_.article = { id, v, nom: G.nom, t: 0 }; sonFanfare();
+  }
   function verifierGuide() {
     if (!S_ || S_.article || !S_.servis) return;
-    const suivant = PRESSE.ARTICLES.find((a) => !aGagne(a.id)); if (!suivant) return;
-    const ok = suivant.etoiles === 0 ? S_.servis >= GUIDE.mentionApres : S_.repu >= 100;       // une étoile = réputation au maximum
-    if (!ok) return;
-    if (suivant.etoiles > 0) S_.repu = BAL.repuApresSucces;
-    const v = verbesDeLaPartie();
-    G.guide.push({ id: suivant.id, v, nom: G.nom }); sauver();
-    S_.article = { id: suivant.id, v, nom: G.nom, t: 0 }; sonFanfare();
+    const cx = S_.ctx;
+    if (!aGagne(0) && S_.servis >= GUIDE.mentionApres) { publier(0); return; }          // « table à retenir »
+    if (S_.repu < 100) return;                                                            // succès de presse = barre de réputation pleine
+    S_.repu = BAL.repuApresSucces; S_.succes++;
+    if (cx.libre) { const suivant = PRESSE.ARTICLES.find((a) => !aGagne(a.id)); if (suivant) publier(suivant.id); else { msg("Succès de presse !", "", "ok", 3); sonFanfare(); } return; }
+    const r = G.camp.restos[cx.id], premier = !r.reussi; r.reussi = true;
+    const prime = Math.round(GUIDE.bonusSucces * cx.coef); S_.score += prime; r.argent += prime; G.camp.argent += prime;
+    let ouvre = "";
+    if (cx.id < RESTOS.length - 1 && !G.camp.restos[cx.id + 1].ouvert) { G.camp.restos[cx.id + 1].ouvert = true; ouvre = RESTOS[cx.id + 1].titre; }
+    const art = Math.min(3, cx.id + 1);                                                   // un article par resto (le Palace garde l'article des 3 étoiles)
+    if (!aGagne(art)) publier(art); else sonFanfare();
+    sauver();
+    msg("Succès de presse ! +" + prime + " pièces", ouvre ? "Nouveau restaurant ouvert : " + ouvre + " (retour à la carte à la fin du service)" : (premier ? "Resto réussi !" : "Continue : la barre repart de la moitié."), "ok", 5);
+  }
+  function etoilesFin() { const part = S_.servis ? S_.parfaits / S_.servis : 0; return !S_.servis ? 0 : part >= BAL.etoiles[1] ? 3 : part >= BAL.etoiles[0] ? 2 : 1; }
+  function finir() {                                              // fin de partie : bilan enregistré dans la campagne
+    G.mode = "over";
+    if (S_.ctx.libre) return;
+    const r = G.camp.restos[S_.ctx.id];
+    r.etoiles = Math.max(r.etoiles, etoilesFin()); r.meilleur = Math.max(r.meilleur, S_.score); sauver();
   }
   const nbEtoilesGuide = () => G.guide.filter((a) => a.id >= 1).length;
 
@@ -334,7 +382,7 @@
     sv.task = null;
     if (!c || c.state !== "call") return;
     if (!c.cmd) {
-      c.cmd = VERBES.nouvelleCommande(niveauVerbes(), rnd, G.groupe);
+      c.cmd = VERBES.nouvelleCommande(niveauVerbes(), rnd, S_.ctx.groupes);
       c.ticket = S_.ticketId++;
       c.cuisine = S_.cuis.ouverte && rnd() < BAL.cuisineProba;
       S_.tickets.push({ id: c.ticket, table: i, cmd: c.cmd, cuisine: c.cuisine, etat: "attente" });
@@ -475,7 +523,8 @@
     const bonus = carry.sansBonus ? 0 : Math.round(10 * c.patience * coef);
     if (!nr) S_.parfaits++;
     if (c.cmd) S_.vus.push({ verbe: c.cmd.verbe, texte: pv(c.cmd.pronom.charAt(0).toLowerCase() + c.cmd.pronom.slice(1), c.cmd.bonne) });
-    const gain = (10 + bonus) * (c.vip ? 2 : 1) + (S_.combo >= 2 ? 5 : 0) + (carry.cuisine ? BAL.bonusCuisine : 0);
+    const gain = Math.round(((10 + bonus) * (c.vip ? 2 : 1) + (S_.combo >= 2 ? 5 : 0) + (carry.cuisine ? BAL.bonusCuisine : 0)) * S_.ctx.coef);   // pièces × coefficient du resto
+    if (!S_.ctx.libre) { const r = G.camp.restos[S_.ctx.id]; r.argent += gain; G.camp.argent += gain; r.meilleur = Math.max(r.meilleur, S_.score + gain); }
     S_.score += gain; S_.combo++; S_.servis++; S_.serie++;
     sv.carry = null;
     tb.plat = carry.dish; tb.platT = 0; sonPlat();
@@ -489,10 +538,10 @@
     verifierGuide();
     if (S_.servis % BAL.clientsParNiveau === 0) {
       S_.niveau++;
-      const n = S_.niveau <= VERBES.GROUPES[G.groupe].fin ? VERBES.NIVEAUX[S_.niveau] : null;
+      const n = S_.niveau <= S_.ctx.fin ? VERBES.NIVEAUX[S_.niveau] : null;
       msg("Niveau " + S_.niveau + " !", n ? "Nouveaux verbes : " + n.titre + " (" + n.detail + ")" : "Les clients sont plus pressés !", "ok", 3.4);
     }
-    else if (S_.servis % BAL.clientsParTable === 0 && nbTables() <= 6) msg("Une nouvelle table est ouverte !", "", "ok", 2.2);
+    else if (S_.servis % BAL.clientsParTable === 0 && S_.ctx.tablesDepart + S_.servis / BAL.clientsParTable <= S_.ctx.tablesMax) msg("Une nouvelle table est ouverte !", "", "ok", 2.2);
     if (G.cuisine && !S_.cuis.ouverte && S_.serie >= BAL.cuisineApres) {
       S_.cuis.ouverte = true;
       msg("La cuisine est ouverte !", "Certaines commandes sont à cuisiner toi-même : passe la porte battante (touche C).", "ok", 5.5);
@@ -514,14 +563,14 @@
   // ------------------------------------------------------------------ mise à jour
   function update(dt) {
     G.t += dt;
-    if (G.mode === "accueil") { G.tA += dt; if (G.sortie > 0) { G.sortie -= dt; if (G.sortie <= 0) { G.sortie = 0; G.mode = "title"; } } return; }
+    if (G.mode === "accueil") { G.tA += dt; if (G.sortie > 0) { G.sortie -= dt; if (G.sortie <= 0) { G.sortie = 0; G.mode = G.accueilSuite || "title"; } } return; }
     if (S_ && S_.article && G.mode === "play") { S_.article.t += dt; return; }        // l'article de presse fige le jeu
     if (G.mode !== "play") return;
     if (S_) S_.repuAff += (S_.repu - S_.repuAff) * Math.min(1, dt * 4);
     const s = S_, sv = s.serveur, rate = TEMPS_PAT[G.chrono];
 
-    if (s.fin > 0) { s.fin -= dt; if (s.fin <= 0) G.mode = "over"; }
-    if (s.seance && G.mode === "play") { s.reste -= dt; if (s.reste <= 0) { s.reste = 0; s.panel = null; G.mode = "over"; return; } }
+    if (s.fin > 0) { s.fin -= dt; if (s.fin <= 0) finir(); }
+    if (s.seance && G.mode === "play") { s.reste -= dt; if (s.reste <= 0) { s.reste = 0; s.panel = null; finir(); return; } }
 
     // apparition des clients
     if (s.fin <= 0) {
@@ -881,9 +930,9 @@
   const ACCENTS = ["à", "â", "ç", "é", "è", "ê", "î", "ô", "û", "ù"];
   const champ = () => document.getElementById("saisie");
   function posteActif(k) {
-    const g = G.groupe;
-    if (g) return g === k + 1;                                  // un seul groupe choisi : seul son poste est ouvert
-    return niveauVerbes() >= POSTES[k].debut;                    // sinon les postes s'ouvrent avec les groupes
+    const g = S_.ctx.groupes;
+    if (g && !g.includes(k + 1)) return false;                   // seuls les postes des groupes du resto sont ouverts
+    return niveauVerbes() >= POSTES[k].debut;                    // les postes s'ouvrent avec les niveaux
   }
   const ticketPar = (id) => S_.tickets.find((t) => t.id === id);
   function ticketSelId() {
@@ -1378,8 +1427,14 @@
     BTN.normal = bouton(W / 2 - 470, 390, 290, 70, "Normal", G.chrono === "normal", 32);
     BTN.lent = bouton(W / 2 - 145, 390, 290, 70, "Lent", G.chrono === "lent", 32);
     BTN.sans = bouton(W / 2 + 180, 390, 290, 70, "Sans chrono", G.chrono === "sans", 32);
-    texte("Verbes :", W / 2, 500, 34, "#fff", "center", "#5a3a29");
-    BTN.groupe = [0, 1, 2, 3].map((g, k) => bouton(W / 2 - 520 + k * 270, 530, 250, 70, g ? VERBES.GROUPES[g].titre : "Tous les verbes", G.groupe === g, 27));
+    if (G.libre) {
+      texte("Entraînement libre — verbes :", W / 2, 500, 34, "#fff", "center", "#5a3a29");
+      BTN.groupe = [0, 1, 2, 3].map((g, k) => bouton(W / 2 - 520 + k * 270, 530, 250, 70, g ? VERBES.GROUPES[g].titre : "Tous les verbes", G.groupe === g, 27));
+    } else {
+      BTN.groupe = null; const R = RESTOS[G.resto];
+      texte(R.titre + " — " + R.lieu, W / 2, 510, 42, "#f6e9cf", "center", "#5a3a29");
+      texte("Verbes : " + R.contenu + "   ·   jusqu’à " + R.tablesMax + " tables   ·   pièces × " + String(R.coef).replace(".", ","), W / 2, 575, 32, "#fff", "center", "#5a3a29", "normal");
+    }
     texte("Type de partie :", W / 2, 632, 34, "#fff", "center", "#5a3a29");
     BTN.duree = DUREES.map((d, k) => bouton(W / 2 - 520 + k * 270, 660, 250, 84, d ? "Séance " + d + " min" : "Réputation", G.duree === d, 29));
     texte(G.duree ? "Séance : seul le temps compte, tu sers un maximum de clients avant la fin." : "Partie classique : garde une bonne réputation ! À zéro, c’est perdu ; au maximum, c’est un succès de presse.", W / 2, 775, 28, "#fff", "center", "#5a3a29", "normal");
@@ -1389,6 +1444,7 @@
     BTN.presse = bouton(1230, 850, 340, 80, "Revue de presse", false, 28);
     texte(nbEtoilesGuide() + " étoile" + (nbEtoilesGuide() > 1 ? "s" : "") + " sur 3", 1400, 955, 26, "#f6e9cf", "center", "#5a3a29");
     BTN.reglages = bouton(W - 340, 28, 310, 70, "Réglages (R)", false, 30);
+    BTN.carte = bouton(30, 112, 400, 62, "← Carte (Échap)", false, 26);
     BTN.cuisine = bouton(30, 28, 400, 70, G.cuisine ? "Cuisine : oui" : "Cuisine : non", !!G.cuisine, 30);
     texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
     if (G.cuisine) texte("Après quelques clients servis sans erreur, la cuisine s’ouvre : tu écris toi-même les plats !", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
@@ -1426,10 +1482,10 @@
   }
   function dessinerFin() {
     ctx.fillStyle = "rgba(40,20,10,0.72)"; ctx.fillRect(0, 0, W, H);
-    const part = S_.servis ? S_.parfaits / S_.servis : 0, nbEt = !S_.servis ? 0 : part >= BAL.etoiles[1] ? 3 : part >= BAL.etoiles[0] ? 2 : 1;      // étoiles : clients servis du premier coup
+    const nbEt = etoilesFin();      // étoiles : clients servis du premier coup
     texte(S_.seance ? "Séance terminée !" : "Service terminé !", W / 2, 100, 92, "#f6e9cf", "center", "#5a3a29");
     for (let k = 0; k < 3; k++) { ctx.save(); ctx.globalAlpha = k < nbEt ? 1 : 0.18; if (k >= nbEt) ctx.filter = "grayscale(1)"; dessiner("fx_etoile", W / 2 + (k - 1) * 120, 205, 0.34, 0.34, "centre"); ctx.restore(); }
-    texte("Score : " + S_.score + "      Clients servis : " + S_.servis, W / 2, 300, 50, "#fff", "center", "#5a3a29");
+    texte((S_.ctx.libre ? "Score : " : "Pièces gagnées : ") + S_.score + "      Clients servis : " + S_.servis, W / 2, 300, 50, "#fff", "center", "#5a3a29");
     if (S_.servis) texte("Servis du premier coup : " + S_.parfaits + " sur " + S_.servis + "      Plats refusés : " + S_.refus, W / 2, 352, 32, "#e8b33f", "center", "#5a3a29", "normal");
     if (S_.rep) texte("Formes justes : " + S_.justes + " sur " + S_.rep + "  (" + Math.round(100 * S_.justes / S_.rep) + " %)" + (S_.cuisines ? "      Plats cuisinés : " + S_.cuisines : ""), W / 2, 402, 40, "#fff", "center", "#5a3a29", "normal");
     const uniq = []; for (const e of S_.erreurs) if (!uniq.some((u) => u.bonne === e.bonne)) uniq.push(e);
@@ -1438,7 +1494,9 @@
       uniq.slice(0, 5).forEach((e, k) => texte(pv(e.pronom, e.verbe) + "   →   " + pv(e.pronom, e.bonne) + "   (" + e.regle.terminaison + ")", W / 2, 526 + k * 56, 40, "#fff", "center", "#5a3a29"));
     } else if (S_.rep) texte("Aucune erreur de forme, bravo !", W / 2, 520, 48, "#9be08f", "center", "#5a3a29");
     else texte("Aucune commande prise cette fois.", W / 2, 520, 44, "#f6e9cf", "center", "#5a3a29", "normal");
-    BTN.rejouer = bouton(W / 2 - 230, 840, 460, 120, "REJOUER", false);
+    BTN.rejouer = bouton(W / 2 - 500, 840, 460, 120, "REJOUER", false);
+    BTN.carteFin = bouton(W / 2 + 40, 840, 460, 120, "CARTE", false);
+    if (!S_.ctx.libre) texte(S_.ctx.titre + (S_.succes ? "   ·   succès de presse : " + S_.succes : "") + "   ·   total en poche : " + G.camp.argent + " pièces", W / 2, 1010, 30, "#f6e9cf", "center", "#5a3a29", "normal");
   }
 
   // ------------------------------------------------------------------ journal : article de presse
@@ -1552,16 +1610,19 @@
   }
   function dessinerAccueil() {
     const t = G.tA, ease = (u) => 1 - Math.pow(1 - Math.max(0, Math.min(1, u)), 3), sf = "bold %px Georgia, 'Times New Roman', serif";
-    const bg = img("bg_titre");
+    const R = RESTOS[G.accueilResto], fac = img(R.facade), bg = fac || img("bg_titre");
     if (bg) ctx.drawImage(bg, 0, 0, W, H); else { ctx.fillStyle = "#f2b774"; ctx.fillRect(0, 0, W, H); }
+    if (!fac && R.tint) teinter(R.tint);                              // façade provisoire : celle du village, teintée
     // pancarte : le texte s'écrit lettre par lettre
-    const nTot = ACCU.LIGNES.join("").length, n = t < ACCU.ENSEIGNE ? 0 : Math.min(nTot, Math.floor((t - ACCU.ENSEIGNE) / 0.07));
+    const lignes = R.enseigne, nTot = lignes.join("").length, n = t < ACCU.ENSEIGNE ? 0 : Math.min(nTot, Math.floor((t - ACCU.ENSEIGNE) / 0.07));
     let reste = n; const tailleE = 50;
-    ACCU.LIGNES.forEach((l, i) => {
+    lignes.forEach((l, i) => {
       const part = l.slice(0, Math.max(0, Math.min(l.length, reste))); reste -= l.length;
       if (!part) return;
       ctx.font = sf.replace("%", tailleE); ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      const full = ctx.measureText(l).width, x0 = ACCU.ENS.x - full / 2; ctx.textAlign = "left";
+      let full = ctx.measureText(l).width;
+      if (full > ACCU.ENS.w + 50) { ctx.font = sf.replace("%", Math.floor(tailleE * (ACCU.ENS.w + 50) / full)); full = ctx.measureText(l).width; }
+      const x0 = ACCU.ENS.x - full / 2; ctx.textAlign = "left";
       ctx.lineWidth = 7; ctx.strokeStyle = "#3b2415"; ctx.lineJoin = "round"; ctx.strokeText(part, x0, ACCU.ENS.y - 26 + i * 56);
       ctx.fillStyle = "#f6d56a"; ctx.fillText(part, x0, ACCU.ENS.y - 26 + i * 56);
     });
@@ -1597,12 +1658,113 @@
     if (G.sortie > 0) { ctx.fillStyle = "rgba(30,15,8," + (1 - G.sortie / 0.45).toFixed(3) + ")"; ctx.fillRect(0, 0, W, H); }
   }
 
+
+  // ------------------------------------------------------------------ la carte de la campagne (chantier 7b)
+  function teinter(col) { ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = col; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  const ouvrir = (mode) => { G.retourDe = G.mode; G.mode = mode; };
+  const CARTE = [{ x: 300, y: 700 }, { x: 700, y: 560 }, { x: 1130, y: 430 }, { x: 1560, y: 310 }];   // centres des médaillons
+  const MED_R = 92;
+  const platRect = (i) => ({ x: CARTE[i].x - 180, y: CARTE[i].y + 104, w: 360, h: 146 });
+  function ouvrirResto(i) {
+    const r = G.camp.restos[i];
+    if (!r.ouvert) { G.carteMsg = { texte: "Verrouillé : obtiens un succès de presse (barre de réputation pleine) au resto « " + RESTOS[i - 1].titre + " ».", jusqu: G.t + 5 }; sonKo(); return; }
+    G.resto = i; G.libre = false; G.accueilResto = i; G.accueilSuite = "title"; G.mode = "accueil"; G.tA = 0; G.sortie = 0; sauver(); sonClic();
+  }
+  function entrainementLibre() { G.libre = true; G.mode = "title"; sonClic(); }
+  function nouvelleCampagne() { G.camp = campVide(); G.guide = []; G.resto = 0; G.carteSel = 0; G.resetT = 0; sauver(); sonClic(); }
+  function cadenas(x, y, r) {
+    ctx.fillStyle = "#e8b33f"; ctx.strokeStyle = "#3b2415"; ctx.lineWidth = 6; rr(x - r * 0.5, y - r * 0.1, r, r * 0.8, 10); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y - r * 0.1, r * 0.32, Math.PI, 0); ctx.stroke(); ctx.fillStyle = "#3b2415"; ctx.beginPath(); ctx.arc(x, y + r * 0.28, r * 0.09, 0, 7); ctx.fill();
+  }
+  function vignetteResto(i, x, y, r, verrou, sur) {
+    const R = RESTOS[i], etat = G.camp.restos[i], fac = img(R.facade), im = fac || img("bg_titre");
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.clip();
+    if (im) { const k = im.width / W, sz = 760 * k; ctx.drawImage(im, (960 - 380) * k, (560 - 380) * k, sz, sz, x - r, y - r, 2 * r, 2 * r); } else { ctx.fillStyle = "#e8b78a"; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }
+    if (!fac && R.tint) { ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = R.tint; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); ctx.globalCompositeOperation = "source-over"; }
+    if (verrou) { ctx.fillStyle = "rgba(40,28,22,0.62)"; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }
+    ctx.restore();
+    ctx.lineWidth = sur ? 12 : 9; ctx.strokeStyle = verrou ? "#8a7a6a" : etat.reussi ? "#6cb04a" : "#e8b33f"; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = "#3b2415"; ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 7); ctx.stroke();
+    if (verrou) cadenas(x, y, r * 0.8);
+    else if (etat.reussi) dessiner("fx_etoile", x + r * 0.78, y - r * 0.78, 0.17, 0.17, "centre");
+  }
+  function decorCarte() {
+    const bg = img("bg_carte");
+    if (bg) { ctx.drawImage(bg, 0, 0, W, H); return; }
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#fbe6b0"); g.addColorStop(0.55, "#f6c27d"); g.addColorStop(1, "#e59d5c");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,244,200,0.8)"; ctx.beginPath(); ctx.arc(1650, 210, 120, 0, 7); ctx.fill();
+    [["#d9a35f", 560, 70], ["#c98f4c", 700, 90], ["#b87d3f", 830, 60]].forEach((c, k) => {        // collines
+      ctx.fillStyle = c[0]; ctx.beginPath(); ctx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 40) ctx.lineTo(x, c[1] + Math.sin(x / 260 + k * 1.7) * c[2] + Math.sin(x / 90 + k) * 12);
+      ctx.lineTo(W, H); ctx.fill();
+    });
+    ctx.fillStyle = "rgba(120,70,40,0.35)";                                                          // la capitale, au loin
+    [[1700, 120, 50], [1760, 70, 40], [1820, 150, 60], [1880, 100, 40]].forEach((b) => ctx.fillRect(b[0], 360 - b[1], b[2], b[1]));
+  }
+  function routeCarte() {
+    const pts = [{ x: -60, y: 860 }].concat(CARTE, [{ x: 1990, y: 200 }]);
+    const trace = () => {
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+        ctx.bezierCurveTo(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6, p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6, p2.x, p2.y);
+      }
+    };
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    trace(); ctx.strokeStyle = "#7a4a2a"; ctx.lineWidth = 62; ctx.stroke();
+    trace(); ctx.strokeStyle = "#f1d6a0"; ctx.lineWidth = 50; ctx.stroke();
+    trace(); ctx.strokeStyle = "#c98f4c"; ctx.lineWidth = 4; ctx.setLineDash([22, 22]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function dessinerCarte() {
+    decorCarte(); routeCarte();
+    texte("La route du Palace", W / 2, 84, 84, "#f6e9cf", "center", "#5a3a29");
+    texte("Un succès de presse (barre de réputation pleine) ouvre le restaurant suivant.", W / 2, 158, 30, "#fff", "center", "#5a3a29", "normal");
+    dessiner("fx_piece", 40, 26, 0.22, 0.22, "haut"); texte(G.camp.argent + " pièces", 124, 62, 40, "#fff", "left", "#5a3a29");
+    { const n = nbEtoilesGuide(); for (let k = 0; k < 3; k++) { ctx.save(); ctx.globalAlpha = k < n ? 1 : 0.3; dessiner("fx_etoile", 62 + k * 46, 128, 0.12, 0.12, "centre"); ctx.restore(); } }
+    BTN.platCarte = [];
+    RESTOS.forEach((R, i) => {
+      const c = CARTE[i], st = G.camp.restos[i], verrou = !st.ouvert, pr = platRect(i);
+      if (G.mouse.x !== undefined && (Math.hypot(G.mouse.x - c.x, G.mouse.y - c.y) < MED_R || dans(pr, G.mouse))) G.carteSel = i;
+      const sel = G.carteSel === i, rr_ = MED_R * (sel && !A.calme ? 1.06 : 1);
+      ctx.fillStyle = "rgba(60,30,20,0.25)"; ctx.beginPath(); ctx.ellipse(c.x, c.y + MED_R + 6, MED_R, 18, 0, 0, 7); ctx.fill();
+      vignetteResto(i, c.x, c.y, rr_, verrou, sel);
+      ctx.fillStyle = sel ? "#fff6dc" : FOND(); rr(pr.x, pr.y, pr.w, pr.h, 20); ctx.fill(); ctx.strokeStyle = sel ? "#e8b33f" : "#5a3a29"; ctx.lineWidth = sel ? 7 : 5; ctx.stroke();
+      texte((i + 1) + ". " + R.titre, c.x, pr.y + 28, 30, ENCRE());
+      texte(R.contenu, c.x, pr.y + 62, 21, ENCRE(), "center", null, "normal");
+      texte("pièces × " + String(R.coef).replace(".", ",") + "  ·  " + R.tablesMax + " tables", c.x, pr.y + 90, 21, ENCRE(), "center", null, "normal");
+      if (verrou) { texte("Verrouillé", c.x, pr.y + 118, 24, "#8a3b1f"); }
+      else texte((st.reussi ? "★ Succès de presse  ·  " : "") + st.argent + " pièces gagnées" + (st.etoiles ? "  ·  " + "★".repeat(st.etoiles) : ""), c.x, pr.y + 118, 21, "#4c8c4a");
+      BTN.platCarte.push({ i, c, pr });
+    });
+    if (G.carteMsg && G.t < G.carteMsg.jusqu) { ctx.fillStyle = "rgba(60,30,20,0.85)"; rr(W / 2 - 700, 868, 1400, 64, 18); ctx.fill(); texte(G.carteMsg.texte, W / 2, 900, 28, "#fff"); }
+    const y = 960, h = 74;
+    BTN.cb = {
+      nom: bouton(40, y, 300, h, "Mon resto (N)", false, 28), presse: bouton(360, y, 320, h, "Revue de presse", false, 28), reglages: bouton(700, y, 300, h, "Réglages (R)", false, 28),
+      libre: bouton(1020, y, 400, h, "Entraînement libre (L)", false, 28), reset: bouton(1440, y, 440, h, G.t < G.resetT ? "Sûr ? Recliquer pour effacer" : "Nouvelle campagne", G.t < G.resetT, 26),
+    };
+    texte("Resto : " + (G.nom.length > 24 ? G.nom.slice(0, 23) + "…" : G.nom), 190, 1052, 22, "#fff", "center", "#5a3a29", "normal");
+    texte("← → choisir · Espace ou Entrée : entrer dans le resto", 1100, 1052, 22, "#fff", "center", "#5a3a29", "normal");
+  }
+  function clicCarte(p) {
+    const b = BTN.cb || {};
+    if (dans(b.nom, p)) { ouvrirNom(); sonClic(); }
+    else if (dans(b.presse, p)) { ouvrir("presse"); sonClic(); }
+    else if (dans(b.reglages, p)) { ouvrir("settings"); sonClic(); }
+    else if (dans(b.libre, p)) entrainementLibre();
+    else if (dans(b.reset, p)) { if (G.t < G.resetT) nouvelleCampagne(); else { G.resetT = G.t + 4; sonClic(); } }
+    else { const m = (BTN.platCarte || []).find((q) => Math.hypot(p.x - q.c.x, p.y - q.c.y) < MED_R || dans(q.pr, p)); if (m) ouvrirResto(m.i); }
+  }
+
   // ------------------------------------------------------------------ rendu
   function rendre() {
     ctx.clearRect(0, 0, W, H);
     if (G.mode === "accueil") { dessinerAccueil(); return; }
+    if (G.mode === "carte") { dessinerCarte(); return; }
     const enCuisine = !!S_ && G.vue === "cuisine" && (G.mode === "play" || G.mode === "over");
-    if (!enCuisine && !dessiner("bg_salle", 0, 0, W / (img("bg_salle") ? img("bg_salle").width : W), H / (img("bg_salle") ? img("bg_salle").height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
+    const R_ = S_ && (G.mode === "play" || G.mode === "over") ? S_.ctx : null, bgk = R_ && R_.salle && img(R_.salle) ? R_.salle : "bg_salle";
+    if (!enCuisine && !dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
+    if (!enCuisine && R_ && R_.tint && bgk === "bg_salle") teinter(R_.tint);
     if (G.mode === "title") { dessinerTitre(); return; }
     if (G.mode === "settings") { dessinerReglages(); return; }
     if (G.mode === "nom") { dessinerNom(); return; }
@@ -1643,15 +1805,17 @@
   const dans = (b, p) => b && p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h;
   function clic(p) {
     if (G.mode === "accueil") { actionAccueil(p); return; }
+    if (G.mode === "carte") { clicCarte(p); return; }
     if (G.mode === "title") {
       if (dans(BTN.normal, p)) { G.chrono = "normal"; sauver(); } else if (dans(BTN.lent, p)) { G.chrono = "lent"; sauver(); } else if (dans(BTN.sans, p)) { G.chrono = "sans"; sauver(); }
       else if (BTN.groupe && BTN.groupe.some((b, k) => dans(b, p) && (G.groupe = k) >= 0)) { sauver(); sonClic(); }
       else if (BTN.duree && BTN.duree.some((b, k) => dans(b, p) && (G.duree = DUREES[k]) >= 0)) { sauver(); sonClic(); }
-      else if (dans(BTN.reglages, p)) { G.mode = "settings"; sonClic(); }
+      else if (dans(BTN.reglages, p)) { ouvrir("settings"); sonClic(); }
+      else if (dans(BTN.carte, p)) { G.mode = "carte"; sonClic(); }
       else if (dans(BTN.cuisine, p)) { G.cuisine = G.cuisine ? 0 : 1; sauver(); sonClic(); }
       else if (dans(BTN.jouer, p)) { nouvellePartie(); sonClic(); }
       else if (dans(BTN.nom, p)) { ouvrirNom(); sonClic(); }
-      else if (dans(BTN.presse, p)) { G.mode = "presse"; sonClic(); }
+      else if (dans(BTN.presse, p)) { ouvrir("presse"); sonClic(); }
       return;
     }
     if (G.mode === "nom") {
@@ -1661,17 +1825,17 @@
     if (G.mode === "presse") {
       const a = (BTN.art || []).find((b) => b && dans(b, p));
       if (a) { G.lecture = Object.assign({}, G.guide.find((g) => g.id === a.id)); G.mode = "lecture"; sonClic(); }
-      else if (dans(BTN.presseRetour, p)) { G.mode = "title"; sonClic(); }
+      else if (dans(BTN.presseRetour, p)) { G.mode = G.retourDe || "title"; sonClic(); }
       return;
     }
     if (G.mode === "lecture") { if (dans(BTN_ART, p)) { G.mode = "presse"; sonClic(); } return; }
     if (G.mode === "settings") {
       const b = (BTN.reg || []).find((b) => dans(b, p));
       if (b) { A[b.cle] = b.val; sauver(); sonClic(); if (b.cle === "voix" && b.val === 1) dire("Lecture à voix haute activée."); }
-      else if (dans(BTN.retour, p)) { G.mode = "title"; sonClic(); }
+      else if (dans(BTN.retour, p)) { G.mode = G.retourDe || "title"; sonClic(); }
       return;
     }
-    if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } return; }
+    if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } else if (dans(BTN.carteFin, p)) { G.mode = "carte"; sonClic(); } return; }
     if (S_ && S_.article) { if (S_.article.t > 0.8) fermerArticle(); return; }
     if (G.paused) { G.paused = false; sonClic(); return; }                   // n'importe quel clic reprend la partie
     if (G.trans) return;
@@ -1705,12 +1869,12 @@
   function annulerPanneau() { S_.panel = null; }
   function fermerArticle() { S_.article = null; sonClic(); }
   function ouvrirNom() {
-    G.mode = "nom"; G.saisieNom = G.nom; const c = champ();
+    G.retourDe = G.mode; G.mode = "nom"; G.saisieNom = G.nom; const c = champ();
     if (c) { c.maxLength = 24; c.value = G.nom; c.focus(); c.select(); }
   }
   function validerNom() {
     const n = (G.saisieNom || "").replace(/\s+/g, " ").trim().slice(0, 24);
-    G.nom = n || NOM_DEFAUT; sauver(); G.mode = "title"; sonClic(); const c = champ(); if (c) { c.blur(); c.maxLength = 20; }
+    G.nom = n || NOM_DEFAUT; sauver(); G.mode = G.retourDe || "title"; sonClic(); const c = champ(); if (c) { c.blur(); c.maxLength = 20; }
   }
   window.addEventListener("keydown", (e) => {
     const k = e.key;
@@ -1726,14 +1890,23 @@
       else { const c = champ(); if (c && document.activeElement !== c) c.focus(); }
       return;
     }
-    if (G.mode === "accueil") { if (k === "Enter" || k === " ") { e.preventDefault(); actionAccueil(null); } return; }
+    if (G.mode === "accueil") { if (k === "Enter" || k === " ") { e.preventDefault(); actionAccueil(null); } else if (k === "Escape" && G.accueilSuite === "title" && G.sortie <= 0) { G.mode = "carte"; } return; }
+    if (G.mode === "carte") {
+      if (k === "ArrowRight" || k === "ArrowDown") { e.preventDefault(); G.carteSel = (G.carteSel + 1) % RESTOS.length; sonClic(); }
+      else if (k === "ArrowLeft" || k === "ArrowUp") { e.preventDefault(); G.carteSel = (G.carteSel + RESTOS.length - 1) % RESTOS.length; sonClic(); }
+      else if (k === "Enter" || k === " ") { e.preventDefault(); ouvrirResto(G.carteSel); }
+      else if (k === "l" || k === "L") { entrainementLibre(); }
+      else if (k === "r" || k === "R") ouvrir("settings");
+      else if (k === "n" || k === "N") { e.preventDefault(); ouvrirNom(); }
+      return;
+    }
     if (G.mode === "nom") {                                           // saisie du nom du resto (le champ caché reçoit les lettres)
       if (k === "Enter") { e.preventDefault(); validerNom(); }
-      else if (k === "Escape") { e.preventDefault(); G.mode = "title"; const c = champ(); if (c) { c.blur(); c.maxLength = 20; } }
+      else if (k === "Escape") { e.preventDefault(); G.mode = G.retourDe || "title"; const c = champ(); if (c) { c.blur(); c.maxLength = 20; } }
       else { const c = champ(); if (c && document.activeElement !== c) c.focus(); }
       return;
     }
-    if (G.mode === "presse") { if (k === "Escape" || k === "Enter") { e.preventDefault(); G.mode = "title"; } return; }
+    if (G.mode === "presse") { if (k === "Escape" || k === "Enter") { e.preventDefault(); G.mode = G.retourDe || "title"; } return; }
     if (G.mode === "lecture") { if (k === "Escape" || k === "Enter" || k === " ") { e.preventDefault(); G.mode = "presse"; } return; }
     if (G.mode === "play" && S_ && S_.article) { if (k === " " || k === "Enter" || k === "Escape") { e.preventDefault(); if (S_.article.t > 0.8) fermerArticle(); } return; }
     if (k === "ArrowLeft") G.keys.gauche = true;
@@ -1742,12 +1915,13 @@
     if (k === "m" || k === "M") { G.muted = !G.muted; return; }
     if (G.mode === "title") {
       if (k === "Enter" || k === " ") { e.preventDefault(); nouvellePartie(); sonClic(); }
-      else if (k === "r" || k === "R") { G.mode = "settings"; }
+      else if (k === "r" || k === "R") ouvrir("settings");
       else if (k === "n" || k === "N") { e.preventDefault(); ouvrirNom(); }
+      else if (k === "Escape") { G.mode = "carte"; sonClic(); }
       return;
     }
-    if (G.mode === "settings") { if (k === "Escape" || k === "Enter") { e.preventDefault(); G.mode = "title"; } return; }
-    if (G.mode === "over") { if (k === "Enter" || k === " ") { e.preventDefault(); nouvellePartie(); sonClic(); } return; }
+    if (G.mode === "settings") { if (k === "Escape" || k === "Enter") { e.preventDefault(); G.mode = G.retourDe || "title"; } return; }
+    if (G.mode === "over") { if (k === "Enter" || k === " ") { e.preventDefault(); nouvellePartie(); sonClic(); } else if (k === "Escape") { G.mode = "carte"; sonClic(); } return; }
     if (G.mode !== "play" || !S_ || G.paused) return;
     if (G.vue === "cuisine") {
       if (G.trans) return;
@@ -1800,9 +1974,9 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, ACCU, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, ACCU, RESTOS, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
-    manquants() { return Object.keys(LISTE).filter((k) => !IMG[k]); },
+    manquants() { return Object.keys(LISTE).filter((k) => !IMG[k] && !/^bg_(carte|titre_\d|salle_\d)$/.test(k)); },
   };
 
   charger().then(() => requestAnimationFrame(boucle));

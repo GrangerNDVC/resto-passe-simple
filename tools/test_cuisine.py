@@ -24,7 +24,7 @@ with sync_playwright() as p:
     ev = pg.evaluate
 
     # --- 0. bouton « Cuisine : oui/non » à l'écran titre
-    ev("localStorage.clear(); __jeu.G.mode='title'; __jeu.G.cuisine=1; __jeu.rendre()")
+    ev("localStorage.clear(); __jeu.G.mode='title'; __jeu.G.libre=true; __jeu.G.cuisine=1; __jeu.rendre()")
     pg.screenshot(path=out + "/c01_titre.png")
     ev("__jeu.clic({x: 230, y: 63})")
     check("titre : le bouton Cuisine bascule sur « non »", ev("__jeu.G.cuisine") == 0)
@@ -102,22 +102,30 @@ with sync_playwright() as p:
         check("accent oublié : « presque », saisie ouverte, aucune erreur comptée", ev("!!__jeu.S.cuis.saisie") and ev("__jeu.S.cuis.saisie.presque") == 1 and ev("__jeu.S.erreurs.length") == 0)
         pg.screenshot(path=out + "/c04_presque.png")
         for _ in range(len(sans)): pg.keyboard.press("Backspace")
-    # erreur franche
+    # erreur franche : le plat cuit quand même, c'est le CLIENT qui le refuse à table (plus de correction au poste)
     faux = "zzz"
     pg.keyboard.type(faux)
-    pat_av = ev("__jeu.S.tables[%d].client.patience" % tk["table"])
+    repu0 = ev("__jeu.S.repu")
     pg.keyboard.press("Enter"); ev("__jeu.avancer(0.3)")
-    check("forme fausse : plat raté au poste", ev(f"__jeu.S.cuis.postes[{k_bon}].etat") == "rate" and ev("!__jeu.S.cuis.saisie"))
+    check("forme fausse : le plat part en cuisson comme les autres (pas de retour immédiat)", ev(f"__jeu.S.cuis.postes[{k_bon}].etat") == "cuit" and ev("!__jeu.S.cuis.saisie"))
     txt = " || ".join(ev("__jeu.S.msgs.map(m=>[m.texte,m.sous,m.note].join(' | '))"))
-    check("message : bonne forme + règle, jamais la forme fautive", bonne in txt and cmd["regle"]["terminaison"] in txt and faux not in txt, txt[:120])
-    check("patience du client réduite", ev("__jeu.S.tables[%d].client.patience" % tk["table"]) < pat_av)
+    check("aucune correction affichée au poste", bonne not in txt and faux not in txt and ev("__jeu.S.cuis.chef.pose") != "fache", txt[:120])
     check("erreur enregistrée pour le bilan", ev("__jeu.S.erreurs.length") == 1)
-    pg.screenshot(path=out + "/c05_rate.png")
+    ev("__jeu.avancer(6)")
     clic_poste(k_bon)
-    check("poste bloqué pendant le nettoyage", ev("!__jeu.S.cuis.saisie"))
-    ev("__jeu.avancer(3.2)")
-    check("poste de nouveau libre", ev(f"__jeu.S.cuis.postes[{k_bon}].etat") == "repos")
-    ev("__jeu.avancer(2)")                                  # laisse le message disparaître : la bonne forme ne reste pas à l'écran
+    check("le plat faux part au passe-plats, marqué refusable", ev("__jeu.S.hatchQ.length") == 1 and ev("__jeu.S.hatchQ[0].mauvais") is True)
+    C = ev("__jeu.CUIS_PORTE"); ev(f"__jeu.clic({{x:{C['x'] + 90}, y:{C['y'] + 200}}})"); ev("__jeu.avancer(0.8)")
+    check("retour en salle", ev("__jeu.G.vue") == "salle")
+    ev("__jeu.avancer(4)")
+    sv_av = ev("__jeu.S.servis")
+    ev(f"__jeu.clic({{x:{x}, y:600}})"); ev("__jeu.avancer(3)")
+    tb = ev("(() => { const t = __jeu.S.tables[%d]; return {bulle: t.bulle && t.bulle.lignes, refus: t.client.refus.length, etape: t.client.etape}; })()" % tk["table"])
+    check("le client refuse le plat écrit à la main et répète sa commande", tb["bulle"] and ("Je voulais" in " ".join(tb["bulle"])) and tb["refus"] == 1, str(tb))
+    check("la réputation baisse, le ticket revient en cuisine", ev("__jeu.S.repu") < repu0 and ev("__jeu.S.tickets.find(t => t.id === %d).etat" % tk["id"]) == "attente" and tb["etape"] == "cuisine")
+    check("le plat refusé ne compte pas comme servi", ev("__jeu.S.servis") == sv_av)
+    pg.screenshot(path=out + "/c05_refus_cuisine.png")
+    # on refait le plat correctement
+    ev("__jeu.changerVue('cuisine')"); ev("__jeu.avancer(0.8)")
     clic_poste(k_bon)
     pg.keyboard.type(bonne); pg.screenshot(path=out + "/c06_saisie.png"); pg.keyboard.press("Enter"); ev("__jeu.avancer(0.2)")
     check("bonne forme (avec accents tapés au clavier) : ça cuit", ev(f"__jeu.S.cuis.postes[{k_bon}].etat") == "cuit", bonne)
@@ -137,7 +145,7 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/c10_salle_plat.png")
     s0 = ev("__jeu.S.servis")
     ev(f"__jeu.clic({{x:{x}, y:600}})"); ev("__jeu.avancer(3)")
-    check("plat cuisiné servi à la bonne table", ev("__jeu.S.servis") == s0 + 1 and ev("__jeu.S.cuisines") == 1, "score=%s" % ev("__jeu.S.score"))
+    check("plat cuisiné servi à la bonne table (après un refus)", ev("__jeu.S.servis") == s0 + 1 and ev("__jeu.S.cuisines") == 2, "score=%s" % ev("__jeu.S.score"))
 
     # --- 7. un client part pendant que son plat cuit : tout est nettoyé
     ev("__jeu.G.chrono = 'normal'")
@@ -183,7 +191,7 @@ with sync_playwright() as p:
     for _ in range(1200):
         ev(SOAK); ev("__jeu.avancer(0.5)")
         if ev("__jeu.G.mode") != "play": break
-    S = ev("({servis: __jeu.S.servis, cuisines: __jeu.S.cuisines, vies: __jeu.S.vies, partis: __jeu.S.partis, niveau: __jeu.S.niveau, mode: __jeu.G.mode, erreurs: __jeu.S.erreurs.length, ouverte: __jeu.S.cuis.ouverte})")
+    S = ev("({servis: __jeu.S.servis, cuisines: __jeu.S.cuisines, repu: __jeu.S.repu, partis: __jeu.S.partis, niveau: __jeu.S.niveau, mode: __jeu.G.mode, erreurs: __jeu.S.erreurs.length, ouverte: __jeu.S.cuis.ouverte})")
     print("   parcours parfait :", S)
     check("joueur parfait salle + cuisine : plats cuisinés servis", S["cuisines"] >= 10 and S["servis"] >= 30, str(S))
     check("joueur parfait : aucune erreur de forme", S["erreurs"] == 0)

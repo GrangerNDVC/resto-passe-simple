@@ -292,7 +292,7 @@
   // groupe (facultatif) : 1, 2 ou 3 pour ne proposer que les verbes de ce groupe ; 0 ou absent : tous les groupes.
   function nouvelleCommande(niveau, rnd, groupe) {
     niveau = Math.max(1, Math.min(NIVEAU_MAX, Math.floor(niveau) || 1));
-    const dansGroupe = (v) => !groupe || v.groupe === groupe;
+    const dansGroupe = (v) => !groupe || (Array.isArray(groupe) ? groupe.includes(v.groupe) : v.groupe === groupe);
     let pool = VERBES.filter((v) => v.niveau <= niveau && dansGroupe(v));
     // aux niveaux d'apprentissage, une commande sur deux porte sur la famille du niveau (celle qu'on vient d'apprendre)
     if (NIVEAUX[niveau].focus && rnd() < 0.5) {

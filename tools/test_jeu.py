@@ -31,12 +31,12 @@ with sync_playwright() as p:
     pg.mouse.click(300, 300)
     check("accueil : un clic à côté du panneau n'entre pas", pg.evaluate("__jeu.G.mode") == "accueil")
     pg.mouse.click(960, 700); pg.wait_for_timeout(900)
-    check("accueil : un clic sur le panneau OUVERT entre dans le resto (écran titre)", pg.evaluate("__jeu.G.mode") == "title")
-    pg.evaluate("__jeu.G.mode = 'accueil'; __jeu.G.tA = 0; __jeu.G.sortie = 0")
+    check("accueil : un clic sur le panneau OUVERT mène à la carte de la campagne", pg.evaluate("__jeu.G.mode") == "carte")
+    pg.evaluate("__jeu.G.accueilSuite = 'title'; __jeu.G.mode = 'accueil'; __jeu.G.tA = 0; __jeu.G.sortie = 0")
     pg.keyboard.press("Space"); pg.keyboard.press("Space"); pg.wait_for_timeout(900)
     check("accueil : Espace passe l'animation puis entre", pg.evaluate("__jeu.G.mode") == "title")
     pg.evaluate("__jeu.G.mode = 'accueil'; __jeu.G.tA = 0; __jeu.A.calme = 1; __jeu.G.tA = 0")
-    pg.evaluate("__jeu.G.mode = 'title'; __jeu.A.calme = 0")
+    pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.A.calme = 0")
     pg.wait_for_timeout(1200)
     pg.screenshot(path=out + "/01_titre.png")
 
@@ -115,6 +115,7 @@ with sync_playwright() as p:
     print("   le client dit :", bulle)
     check("le client refuse le plat (bulle « pas le plat demandé » ou « pas la bonne cuisson »)", bool(bulle) and ("plat" in " ".join(bulle) or "cuisson" in " ".join(bulle)))
     pg.screenshot(path=out + "/02_refus.png")
+    check("le client répète sa commande (verbe + personne) et la réputation baisse", "Je voulais" in " ".join(bulle) and cmd["verbe"] in " ".join(bulle) and ev("__jeu.S.repu") < ev("__jeu.BAL.repuDepart"), " ".join(bulle))
     check("le refus coûte de la patience et brise la série", ev("__jeu.S.tables[%d].client.patience" % i) < 0.9 and ev("__jeu.S.combo") == 0)
     ev("__jeu.avancer(4.0)")
     check("le serveur est reparti au passe-plats : le choix se rouvre", ev("!!__jeu.S.panel"))
@@ -206,7 +207,7 @@ with sync_playwright() as p:
         if pg.evaluate("__jeu.S.niveau") >= 5: break
     niv = pg.evaluate("__jeu.S.niveau")
     check("jamais deux clients identiques en même temps", not doublons, str(doublons[:1]))
-    check("le jeu atteint le niveau 5", niv >= 5, "niveau=%s servis=%s vies=%s mode=%s" % (niv, pg.evaluate("__jeu.S.servis"), pg.evaluate("__jeu.S.vies"), pg.evaluate("__jeu.G.mode")))
+    check("le jeu atteint le niveau 5", niv >= 5, "niveau=%s servis=%s repu=%s mode=%s" % (niv, pg.evaluate("__jeu.S.servis"), pg.evaluate("__jeu.S.repu"), pg.evaluate("__jeu.G.mode")))
     pg.screenshot(path=out + "/03_niveau5.png")
     hud = pg.evaluate("__jeu.S.niveau")
     # un ticket du niveau courant ne doit jamais contenir un verbe d'un niveau supérieur
@@ -233,7 +234,7 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/04_bilan.png")
 
     # --- 5. mode séance : choix de la durée à l'écran titre, pas de cœurs, fin au bout du temps, bilan
-    pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.duree = 0; __jeu.rendre()")
+    pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.G.duree = 0; __jeu.rendre()")
     pg.screenshot(path=out + "/05_titre_seance.png")
     pg.evaluate("__jeu.clic({x: 960 - 520 + 270 + 125, y: 700})")      # bouton « Séance 3 min »
     check("titre : clic sur « Séance 3 min »", pg.evaluate("__jeu.G.duree") == 3)
@@ -244,11 +245,11 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/06_seance_hud.png")
     pg.evaluate("__jeu.avancer(200)")
     check("séance : fin au bout du temps", pg.evaluate("__jeu.G.mode") == "over" and pg.evaluate("__jeu.S.reste") == 0)
-    check("séance : aucun cœur perdu", pg.evaluate("__jeu.S.vies") == 3, "partis=%s" % pg.evaluate("__jeu.S.partis"))
+    check("séance : seul le temps termine la partie (pas la réputation)", pg.evaluate("__jeu.S.reste") == 0, "partis=%s" % pg.evaluate("__jeu.S.partis"))
     pg.screenshot(path=out + "/07_bilan_seance.png")
 
     # --- 7. chantier 3 : choix du groupe à l'écran titre, couleurs, plats par groupe, niveaux de départ
-    pg.evaluate("localStorage.clear(); __jeu.G.mode = 'title'; __jeu.G.groupe = 0; __jeu.G.duree = 0; __jeu.G.chrono = 'sans'; __jeu.rendre()")
+    pg.evaluate("localStorage.clear(); __jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.G.groupe = 0; __jeu.G.duree = 0; __jeu.G.chrono = 'sans'; __jeu.rendre()")
     pg.screenshot(path=out + "/13_titre_groupes.png")
     for k, g in enumerate([2, 3, 1, 0]):
         pg.evaluate("__jeu.clic({x: %d, y: 565})" % (960 - 520 + g * 270 + 125))
@@ -257,7 +258,7 @@ with sync_playwright() as p:
     GRP = {1: ("g1",), 2: ("g2",), 3: ("g3", "aux")}
     DEBUT = {0: 1, 1: 1, 2: 6, 3: 7}
     for g in (1, 2, 3):
-        pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.groupe = %d; __jeu.start()" % g)
+        pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.G.groupe = %d; __jeu.start()" % g)
         check("groupe %d : niveau de départ %d" % (g, DEBUT[g]), pg.evaluate("__jeu.S.niveau") == DEBUT[g])
         vus_g, mauvais, plats_ok, plats_n, brique_ok = set(), [], 0, 0, True
         for _ in range(240):
@@ -288,7 +289,7 @@ with sync_playwright() as p:
         check("groupe %d : le jeu continue sans erreur" % g, pg.evaluate("__jeu.G.mode") in ("play", "over"))
     # captures des 4 couleurs de brique : on fabrique une commande de chaque couleur
     for coul, niv in (("g1", 1), ("g2", 6), ("g3", 9), ("aux", 8)):
-        pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.groupe = 0; __jeu.start(); __jeu.G.chrono = 'sans'; __jeu.avancer(2.0)")
+        pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.G.groupe = 0; __jeu.start(); __jeu.G.chrono = 'sans'; __jeu.avancer(2.0)")
         ok = pg.evaluate("""(coul) => {
           const J = __jeu, S = J.S; let c = null;
           for (let k = 0; k < 500 && (!c || c.couleur !== coul); k++) c = VERBES.nouvelleCommande(10, Math.random, 0);
@@ -299,7 +300,7 @@ with sync_playwright() as p:
         check("capture brique %s" % coul, ok, str(ok))
         pg.screenshot(path=out + "/14_panneau_%s.png" % coul)
     # plat servi : une table avec chaque plat
-    pg.evaluate("""() => { __jeu.G.mode = 'title'; __jeu.start(); __jeu.avancer(1.0); const S = __jeu.S; S.panel = null;
+    pg.evaluate("""() => { __jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.start(); __jeu.avancer(1.0); const S = __jeu.S; S.panel = null;
       const noms = ['plat_g1_salade', 'plat_g2_soupe', 'plat_g3_ragout', 'plat_cloche'];
       S.tables.slice(0, 4).forEach((t, i) => { t.client = {slug: 'client_01_garcon', vip: false, state: 'eat', t: 0, patience: 1, patSec: 99, cmd: null, ticket: null, tries: 0, look: {skin:'#f1c9a5',shirt:'#e8b33f',hair:'#5a3a29'}, bob: 0}; t.plat = noms[i]; });
       S.servis = 12; __jeu.rendre(); }""")
@@ -319,7 +320,7 @@ with sync_playwright() as p:
     pg.keyboard.press("p"); pg.keyboard.press("Escape"); check("pause : Échap reprend", ev("__jeu.G.paused") is False)
 
     # --- 6. accessibilité : écran Réglages, mémorisation, clavier, voix
-    pg.evaluate("localStorage.clear(); __jeu.G.mode = 'title'; __jeu.rendre()")
+    pg.evaluate("localStorage.clear(); __jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.rendre()")
     pg.evaluate("__jeu.clic({x: 1735, y: 63}); __jeu.rendre()")         # bouton « Réglages » (puis dessin : les boutons existent)
     check("réglages : l'écran s'ouvre", pg.evaluate("__jeu.G.mode") == "settings")
     def opt(ligne, k, n):                                               # centre du bouton k de la ligne
@@ -334,7 +335,7 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/08_reglages.png")
     mem = pg.evaluate("localStorage.getItem(__jeu.CLE)")
     check("réglages : mémorisés dans le navigateur", mem is not None and '"taille":2' in mem, str(mem)[:80])
-    pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'"); pg.wait_for_timeout(800)
+    pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true"); pg.wait_for_timeout(800)
     A = pg.evaluate("__jeu.A")
     check("réglages : retrouvés après rechargement", A["taille"] == 2 and A["police"] == 1 and A["termin"] == 1, str(A))
     pg.keyboard.press("Enter")                                          # Entrée sur l'écran titre : jouer
@@ -363,8 +364,35 @@ with sync_playwright() as p:
     pg.evaluate("__jeu.A.contraste = 1; __jeu.A.taille = 1; __jeu.avancer(20); __jeu.rendre()")
     pg.screenshot(path=out + "/12_contraste.png")
     check("accessibilité : le jeu tourne avec contraste, police et voix", pg.evaluate("__jeu.G.mode") in ("play", "over"))
+    # --- barre de réputation (remplace les cœurs)
+    pg.evaluate("localStorage.clear()"); pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true"); pg.wait_for_timeout(400)
+    pg.evaluate("__jeu.G.cuisine = 0; __jeu.G.chrono = 'sans'; __jeu.G.duree = 0; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start(); __jeu.avancer(2)")
+    r0 = pg.evaluate("__jeu.S.repu")
+    check("réputation : départ à la valeur prévue", r0 == pg.evaluate("__jeu.BAL.repuDepart"), str(r0))
+    for _ in range(300):
+        pg.evaluate(BOT); pg.evaluate("__jeu.avancer(0.25)")
+        if pg.evaluate("__jeu.S.servis") >= 1: break
+    check("réputation : un client servi du premier coup la fait monter", pg.evaluate("__jeu.S.repu") > r0, str(pg.evaluate("__jeu.S.repu")))
+    pg.evaluate("__jeu.rendre()"); pg.screenshot(path=out + "/47_hud_reputation.png", clip={"x": 0, "y": 0, "width": 700, "height": 200})
+    r1 = pg.evaluate("__jeu.S.repu"); pg.evaluate("__jeu.S.repu = 50; __jeu.S.repuAff = 50")
+    t = pg.evaluate("(() => { const t = __jeu.S.tables.find(t => t.client && t.client.state === 'call'); return t ? t.i : -1; })()")
+    for _ in range(80):
+        if t >= 0: break
+        pg.evaluate("__jeu.avancer(0.5)"); t = pg.evaluate("(() => { const t = __jeu.S.tables.find(t => t.client && t.client.state === 'call'); return t ? t.i : -1; })()")
+    pg.evaluate("__jeu.G.chrono = 'normal'; const c = __jeu.S.tables[%d].client; c.patience = 0.0001; __jeu.avancer(0.5); __jeu.G.chrono = 'sans'" % t)
+    check("réputation : un client parti fâché la fait baisser", pg.evaluate("__jeu.S.repu") <= 50 + pg.evaluate("__jeu.BAL.repuFache") + 1, str(pg.evaluate("__jeu.S.repu")))
+    pg.evaluate("__jeu.S.repu = 3; __jeu.S.repuAff = 3; __jeu.G.chrono = 'normal'")
+    for _ in range(200):
+        t = pg.evaluate("(() => { const t = __jeu.S.tables.find(t => t.client && t.client.state === 'call'); return t ? t.i : -1; })()")
+        if t >= 0: pg.evaluate("__jeu.S.tables[%d].client.patience = 0.0001" % t)
+        pg.evaluate("__jeu.avancer(0.5)")
+        if pg.evaluate("__jeu.G.mode") == "over": break
+    check("réputation à zéro : la partie est perdue (bilan)", pg.evaluate("__jeu.G.mode") == "over" and pg.evaluate("__jeu.S.repu") == 0)
+    pg.screenshot(path=out + "/48_perdu.png")
+    pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.G.chrono = 'normal'")
+
     # --- le guide gourmand : nom du resto, articles de presse, revue de presse
-    pg.evaluate("localStorage.clear()"); pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'"); pg.wait_for_timeout(800)
+    pg.evaluate("localStorage.clear()"); pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true"); pg.wait_for_timeout(800)
     pg.evaluate("__jeu.G.cuisine = 0; __jeu.G.chrono = 'sans'")
     ev("""() => { window.__txt = []; const P = CanvasRenderingContext2D.prototype; for (const f of ['fillText', 'strokeText']) { const o = P[f]; P[f] = function (t, ...r) { window.__txt.push(String(t)); return o.call(this, t, ...r); }; } }""")
     pg.keyboard.press("n")
@@ -379,22 +407,23 @@ with sync_playwright() as p:
     pg.evaluate("__jeu.avancer(1.0)"); T = " ".join(textes())
     check("guide : l'article porte le nom du resto, le journal et une forme au passé simple", "Chez Marcel" in T and "LE GOURMET DU MATIN" in T and any(f.replace(" ", "\u00a0") in T for f in pg.evaluate("__jeu.S.article.v")), "")
     pg.screenshot(path=out + "/40_article_mention.png")
-    sv0 = pg.evaluate("__jeu.S.servis"); pat = pg.evaluate("__jeu.S.vies"); pg.evaluate("__jeu.avancer(5.0)")
-    check("guide : le jeu est figé pendant l'article", pg.evaluate("__jeu.S.servis") == sv0 and pg.evaluate("__jeu.S.vies") == pat and pg.evaluate("!!__jeu.S.article"))
+    sv0 = pg.evaluate("__jeu.S.servis"); pat = pg.evaluate("__jeu.S.repu"); pg.evaluate("__jeu.avancer(5.0)")
+    check("guide : le jeu est figé pendant l'article", pg.evaluate("__jeu.S.servis") == sv0 and pg.evaluate("__jeu.S.repu") == pat and pg.evaluate("!!__jeu.S.article"))
     pg.keyboard.press(" ")
     check("guide : Espace ferme l'article et la partie reprend", pg.evaluate("!__jeu.S.article"))
     check("guide : l'article est mémorisé", pg.evaluate("__jeu.G.guide.length") == 1 and '"guide":[{"id":0' in pg.evaluate("localStorage.getItem(__jeu.CLE)"))
     pg.evaluate("__jeu.verifierGuide()")
     check("guide : pas de nouvel article sans nouveau palier", pg.evaluate("!__jeu.S.article"))
-    pg.evaluate("const S = __jeu.S; S.niveau = 4; S.parfaits = 0; __jeu.verifierGuide()")
-    check("guide : l'étoile attend si la précision est insuffisante (parfaits 0 %)", pg.evaluate("!__jeu.S.article"))
-    pg.evaluate("const S = __jeu.S; S.parfaits = S.servis; __jeu.verifierGuide()")
-    check("guide : 1re étoile après 3 niveaux franchis avec une bonne précision", pg.evaluate("!!__jeu.S.article && __jeu.S.article.id") == 1)
+    pg.evaluate("const S = __jeu.S; S.repu = 80; __jeu.verifierGuide()")
+    check("guide : pas d'étoile tant que la réputation n'est pas au maximum", pg.evaluate("!__jeu.S.article"))
+    pg.evaluate("const S = __jeu.S; S.repu = 100; __jeu.verifierGuide()")
+    check("guide : 1re étoile quand la barre de réputation est pleine (succès de presse)", pg.evaluate("!!__jeu.S.article && __jeu.S.article.id") == 1)
+    check("guide : après un succès de presse la réputation retombe à mi-hauteur", pg.evaluate("__jeu.S.repu") == pg.evaluate("__jeu.BAL.repuApresSucces"))
     pg.evaluate("__jeu.avancer(1.0)"); T = " ".join(textes()); pg.screenshot(path=out + "/41_article_etoile1.png")
     check("guide : le titre de l'article de la 1re étoile cite le resto", "Première étoile pour Chez Marcel !" in T)
     pg.mouse.click(960, 540)
     check("guide : un clic ferme l'article", pg.evaluate("!__jeu.S.article"))
-    pg.evaluate("__jeu.G.mode = 'title'; __jeu.rendre()"); T = " ".join(textes())
+    pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true; __jeu.rendre()"); T = " ".join(textes())
     check("guide : l'écran titre montre le nom et la revue de presse", "Chez Marcel" in T and "Revue de presse" in T)
     pg.evaluate("__jeu.G.mode = 'presse'"); pg.evaluate("__jeu.rendre()"); pg.screenshot(path=out + "/42_revue_presse.png")
     pg.evaluate("__jeu.rendre()"); r = pg.evaluate("(() => { const a = window.__jeu.G.guide; return a.length; })()")
@@ -404,21 +433,73 @@ with sync_playwright() as p:
     pg.evaluate("__jeu.G.mode = 'lecture'; __jeu.G.lecture = Object.assign({}, __jeu.G.guide[1])"); pg.evaluate("__jeu.rendre()"); pg.screenshot(path=out + "/43_relecture.png")
     pg.keyboard.press("Escape")
     check("guide : la relecture d'un article se ferme", pg.evaluate("__jeu.G.mode") == "presse")
-    pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'"); pg.wait_for_timeout(500)
+    pg.reload(); pg.wait_for_function("window.__jeu !== undefined"); pg.evaluate("__jeu.G.mode = 'title'; __jeu.G.libre = true"); pg.wait_for_timeout(500)
     check("guide : nom et articles retrouvés après rechargement", pg.evaluate("__jeu.G.nom") == "Chez Marcel" and pg.evaluate("__jeu.G.guide.length") == 2)
     ev("""() => { window.__txt = []; const P = CanvasRenderingContext2D.prototype; for (const f of ['fillText', 'strokeText']) { const o = P[f]; P[f] = function (t, ...r) { window.__txt.push(String(t)); return o.call(this, t, ...r); }; } }""")
     pg.evaluate("__jeu.G.cuisine = 0; __jeu.G.chrono = 'sans'; __jeu.start()")
-    pg.evaluate("const S = __jeu.S; S.servis = 60; S.parfaits = 60; S.niveau = 7; __jeu.verifierGuide()")
-    check("guide : 2e étoile après 6 niveaux franchis", pg.evaluate("!!__jeu.S.article && __jeu.S.article.id") == 2)
+    pg.evaluate("const S = __jeu.S; S.servis = 20; S.repu = 100; __jeu.verifierGuide()")
+    check("guide : 2e étoile : barre de réputation pleine", pg.evaluate("!!__jeu.S.article && __jeu.S.article.id") == 2)
     pg.evaluate("__jeu.avancer(1.0)"); pg.screenshot(path=out + "/44_article_etoile2.png"); pg.evaluate("__jeu.fermerArticle()")
-    pg.evaluate("const S = __jeu.S; S.servis = 90; S.parfaits = 90; S.niveau = 11; __jeu.verifierGuide()")
-    check("guide : 3e étoile après 10 niveaux franchis", pg.evaluate("!!__jeu.S.article && __jeu.S.article.id") == 3)
+    pg.evaluate("const S = __jeu.S; S.repu = 100; __jeu.verifierGuide()")
+    check("guide : 3e étoile : barre de réputation pleine", pg.evaluate("!!__jeu.S.article && __jeu.S.article.id") == 3)
     pg.evaluate("__jeu.avancer(1.0)"); T = " ".join(textes()); pg.screenshot(path=out + "/45_article_etoile3.png")
     check("guide : l'article de la 3e étoile est lisible en entier (signature du critique)", "Anatole Lefourchon" in T and "légende" in T)
     pg.evaluate("__jeu.fermerArticle(); __jeu.verifierGuide()")
     check("guide : les 4 articles obtenus, plus aucun article ensuite", pg.evaluate("__jeu.G.guide.length") == 4 and pg.evaluate("!__jeu.S.article"))
     pg.evaluate("__jeu.A.taille = 2; __jeu.G.lecture = Object.assign({}, __jeu.G.guide[3]); __jeu.G.mode = 'lecture'; __jeu.rendre()"); pg.screenshot(path=out + "/46_article_tres_grand.png")
-    pg.evaluate("__jeu.A.taille = 0; __jeu.G.mode = 'title'")
+    pg.evaluate("__jeu.A.taille = 0; __jeu.G.mode = 'title'; __jeu.G.libre = true")
+    # --- chantier 7b : la campagne (carte, 4 restos, déblocage, contenus, sauvegarde)
+    ev = pg.evaluate
+    ev("localStorage.clear(); __jeu.nouvelleCampagne(); __jeu.G.libre = false; __jeu.G.chrono = 'normal'; __jeu.G.mode = 'carte'; __jeu.rendre()")
+    T = " ".join(textes()); pg.screenshot(path=out + "/50_carte.png")
+    check("carte : titre, 4 restos et pièces affichés", "La route du Palace" in T and "Bistrot de village" in T and "Le Palace" in T and "0 pièces" in T, T[:200])
+    check("carte : seul le resto 1 est ouvert au départ", ev("__jeu.G.camp.restos.map(r => r.ouvert)") == [True, False, False, False])
+    ev("__jeu.ouvrirResto(1)")
+    check("carte : un resto verrouillé ne s'ouvre pas et explique pourquoi", ev("__jeu.G.mode") == "carte" and "succès de presse" in ev("__jeu.G.carteMsg.texte"))
+    ev("__jeu.rendre()"); pg.screenshot(path=out + "/51_carte_verrou.png")
+    ev("__jeu.G.t += 0; __jeu.clicCarte({x: %d, y: %d})" % (300, 700))
+    check("carte : clic sur le resto 1 → animation d'accueil de ce resto", ev("__jeu.G.mode") == "accueil" and ev("__jeu.G.accueilResto") == 0 and ev("__jeu.G.accueilSuite") == "title")
+    ev("__jeu.G.tA = __jeu.ACCU.FIN; __jeu.entrerResto()"); ev("__jeu.update(0.5)")
+    check("accueil du resto → écran titre sans choix de verbes", ev("__jeu.G.mode") == "title" and ev("__jeu.G.libre") is False)
+    ev("__jeu.rendre()"); T = " ".join(textes()); pg.screenshot(path=out + "/52_titre_resto.png")
+    check("titre d'un resto : nom, contenu et coefficient", "Bistrot de village" in T and "1er groupe" in T and "× 1" in T and "Entraînement libre" not in T, T[:300])
+    ev("__jeu.G.cuisine = 0; __jeu.G.chrono = 'sans'; __jeu.start()")
+    gr = ev("Array.from({length: 80}, () => VERBES.nouvelleCommande(__jeu.S.ctx.fin, Math.random, __jeu.S.ctx.groupes).groupe)")
+    check("resto 1 : seulement des verbes du 1er groupe", set(gr) == {1}, str(set(gr)))
+    ev("__jeu.S.servis = 100; __jeu.S.tables.forEach(t => t.client = null)")
+    check("resto 1 : 4 tables au maximum", ev("[0,1,2,3,4,5].filter(i => __jeu.tableActive(i)).length") == 4)
+    # succès de presse : article, prime, déblocage du resto suivant
+    ev("__jeu.start(); __jeu.S.servis = 6; __jeu.verifierGuide()")
+    check("5 clients servis : article « table à retenir »", ev("!!__jeu.S.article && __jeu.S.article.id") == 0)
+    ev("__jeu.fermerArticle(); __jeu.S.repu = 100; __jeu.verifierGuide()")
+    check("succès de presse au resto 1 : article ★ et resto 2 ouvert", ev("!!__jeu.S.article") and ev("__jeu.G.camp.restos[1].ouvert") is True and ev("__jeu.G.camp.restos[0].reussi") is True)
+    check("succès de presse : prime en pièces et barre remise à mi-hauteur", ev("__jeu.S.score") == 50 and ev("__jeu.G.camp.argent") == 50 and ev("__jeu.S.repu") == ev("__jeu.BAL.repuApresSucces"), str(ev("__jeu.S.score")))
+    ev("__jeu.avancer(1.0)"); ev("__jeu.fermerArticle()")
+    # contenus des restos 2 à 4
+    for i, grp, nmax, coef in [(1, {1, 2}, 5, 1.5), (2, {1, 2, 3}, 6, 2), (3, {1, 2, 3}, 6, 3)]:
+        ev("__jeu.G.camp.restos[%d].ouvert = true; __jeu.G.resto = %d; __jeu.G.libre = false; __jeu.start()" % (i, i))
+        gr = ev("Array.from({length: 150}, () => VERBES.nouvelleCommande(__jeu.S.ctx.fin, Math.random, __jeu.S.ctx.groupes).groupe)")
+        check("resto %d : groupes %s, %d tables, pièces × %s" % (i + 1, sorted(grp), nmax, coef), set(gr) == grp and ev("__jeu.S.ctx.tablesMax") == nmax and ev("__jeu.S.ctx.coef") == coef, str(set(gr)))
+    irr = ev("Array.from({length: 150}, () => VERBES.nouvelleCommande(__jeu.S.ctx.fin, Math.random, __jeu.S.ctx.groupes).niveau)")
+    check("Palace : niveau 10 (irréguliers en vedette)", set(irr) == {10})
+    ev("__jeu.G.chrono = 'sans'; __jeu.avancer(2.0)"); ev("__jeu.rendre()"); pg.screenshot(path=out + "/53_palace_salle.png")
+    ev("__jeu.G.resto = 0; __jeu.start(); __jeu.S.servis = 3; __jeu.S.score = 120; __jeu.G.camp.restos[0].argent = 120; __jeu.finir()")
+    check("fin de partie : bilan enregistré dans la campagne (étoiles)", ev("__jeu.G.mode") == "over" and ev("__jeu.G.camp.restos[0].etoiles") >= 0 and ev("__jeu.G.camp.restos[0].meilleur") >= 120)
+    ev("__jeu.rendre()"); T = " ".join(textes()); pg.screenshot(path=out + "/54_fin_campagne.png")
+    check("fin de partie en campagne : « Pièces gagnées » et bouton CARTE", "Pièces gagnées" in T and "CARTE" in T)
+    ev("__jeu.clic({x: 1200, y: 900})")
+    check("le bouton CARTE ramène à la carte", ev("__jeu.G.mode") == "carte")
+    # sauvegarde
+    ev("__jeu.sauver()"); pg.reload(); pg.wait_for_function("window.__jeu !== undefined")
+    check("sauvegarde : restos ouverts, réussite et pièces retrouvés après rechargement", ev("__jeu.G.camp.restos.map(r => r.ouvert)") == [True, True, True, True] and ev("__jeu.G.camp.restos[0].reussi") is True and ev("__jeu.G.camp.argent") == 50)
+    ev("__jeu.G.mode = 'carte'; __jeu.rendre()")
+    ev("__jeu.clicCarte({x: 1440 + 50, y: 990})")
+    check("nouvelle campagne : demande confirmation", ev("__jeu.G.camp.argent") == 50)
+    ev("__jeu.clicCarte({x: 1440 + 50, y: 990})")
+    check("nouvelle campagne : confirmée, tout est effacé sauf le nom", ev("__jeu.G.camp.argent") == 0 and ev("__jeu.G.camp.restos.map(r => r.ouvert)") == [True, False, False, False] and ev("__jeu.G.guide.length") == 0)
+    ev("__jeu.G.mode = 'carte'; __jeu.entrainementLibre()")
+    check("entraînement libre : écran titre avec le choix des verbes", ev("__jeu.G.mode") == "title" and ev("__jeu.G.libre") is True)
+    ev("__jeu.G.mode = 'title'")
     pg.evaluate("localStorage.clear()")
     b.close()
 
