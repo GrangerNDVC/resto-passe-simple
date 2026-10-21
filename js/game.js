@@ -125,12 +125,54 @@
     { id: 2, titre: "Grand restaurant", lieu: "La grande ville", enseigne: ["Le Grand", "Passé Simple"], groupes: [1, 2, 3], debut: 7, fin: 9, tablesDepart: 4, tablesMax: 6, coef: 2, contenu: "3e groupe + rappel", tint: "#c3b0dc", facade: "bg_titre_3", salle: "bg_salle_3" },
     { id: 3, titre: "Le Palace", lieu: "La capitale", enseigne: ["LE PALACE", "du Passé Simple"], groupes: [1, 2, 3], debut: 10, fin: 10, tablesDepart: 5, tablesMax: 6, coef: 3, contenu: "Tous les groupes, irréguliers", tint: "#f0d27a", facade: "bg_titre_4", salle: "bg_salle_4" },
   ];
-  const campVide = () => ({ argent: 0, restos: RESTOS.map((R, i) => ({ ouvert: i === 0, reussi: false, etoiles: 0, argent: 0, meilleur: 0 })) });
+  // ------------------------------------------------------------------ l'atelier déco (chantier 7c)
+  // Chaque resto a sa propre déco, payée avec les pièces de la campagne (G.camp.argent). Les prix de base ci-dessous sont ceux du bistrot ;
+  // ils sont multipliés par PRIX_RESTO : plus on monte, plus la déco coûte cher (plus vite que les pièces gagnées : coef 1 / 1,5 / 2 / 3).
+  const PRIX_RESTO = [1, 2, 3.5, 6];
+  const PAPIERS = [
+    { id: "creme", nom: "Rayures crème", prix: 0, tint: null, pastille: "#f3e3b0" },
+    { id: "rose", nom: "Rose poudré", prix: 100, tint: "#f2b8b8", pastille: "#f2b8b8" },
+    { id: "sauge", nom: "Vert sauge", prix: 100, tint: "#b9d6b0", pastille: "#b9d6b0" },
+    { id: "soleil", nom: "Jaune soleil", prix: 100, tint: "#ffd84a", pastille: "#ffd84a" },
+    { id: "lilas", nom: "Lilas", prix: 100, tint: "#d4c1ec", pastille: "#d4c1ec" },
+    { id: "abricot", nom: "Abricot", prix: 100, tint: "#ffb98a", pastille: "#ffb98a" },
+  ];
+  const NAPPES = [
+    { id: "origine", nom: "Nappes d’origine", prix: 0, voile: null, pastille: "#d9473b" },
+    { id: "pastel", nom: "Nappes pastel", prix: 150, voile: "rgba(255,255,255,0.40)", pastille: "#f2c9c0" },
+    { id: "or", nom: "Nappes dorées", prix: 220, voile: "rgba(232,179,63,0.48)", pastille: "#e8b33f" },
+    { id: "velours", nom: "Nappes velours", prix: 300, voile: "rgba(96,30,64,0.38)", pastille: "#8a3a66" },
+  ];
+  const OBJETS = [
+    { id: "plante", nom: "Plante verte", prix: 120, img: "deco_plante" },
+    { id: "lampe", nom: "Lampe de bistrot", prix: 180, img: "deco_lampe" },
+    { id: "horloge", nom: "Horloge", prix: 240, img: "deco_horloge" },
+    { id: "ardoise", nom: "Ardoise du jour", prix: 300, img: "deco_ardoise" },
+  ];
+  const CATALOGUE = [
+    { cle: "papier", titre: "Papier peint", liste: PAPIERS },
+    { cle: "nappes", titre: "Nappes", liste: NAPPES },
+    { cle: "objet", titre: "Objets", liste: OBJETS },
+  ];
+  const prixDeco = (base, i) => Math.round(base * PRIX_RESTO[i] / 10) * 10;
+  const decoVide = () => ({ papier: "creme", nappes: "origine", achats: [] });
+  const parDefaut = (cle, id) => (cle === "papier" && id === "creme") || (cle === "nappes" && id === "origine");
+  const possede = (d, cle, id) => parDefaut(cle, id) || d.achats.includes(cle + ":" + id);
+  const choisi = (d, cle, id) => (cle === "objet" ? d.achats.includes("objet:" + id) : d[cle] === id);
+  function decoLire(o) {                                         // lecture prudente de la déco sauvegardée
+    const d = decoVide();
+    if (!o || typeof o !== "object") return d;
+    if (Array.isArray(o.achats)) d.achats = o.achats.filter((a, k) => typeof a === "string" && o.achats.indexOf(a) === k && CATALOGUE.some((C) => C.cle !== "objet" ? C.liste.some((it) => C.cle + ":" + it.id === a && it.prix > 0) : C.liste.some((it) => C.cle + ":" + it.id === a)));
+    if (typeof o.papier === "string" && PAPIERS.some((p) => p.id === o.papier) && possede(d, "papier", o.papier)) d.papier = o.papier;
+    if (typeof o.nappes === "string" && NAPPES.some((p) => p.id === o.nappes) && possede(d, "nappes", o.nappes)) d.nappes = o.nappes;
+    return d;
+  }
+  const campVide = () => ({ argent: 0, restos: RESTOS.map((R, i) => ({ ouvert: i === 0, reussi: false, etoiles: 0, argent: 0, meilleur: 0, deco: decoVide() })) });
   function campLire(o) {                                         // lecture prudente de la sauvegarde
     const c = campVide(), n = (v, max) => (Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0);
     if (!o || !Array.isArray(o.restos)) return c;
     c.argent = n(o.argent, 1e9);
-    RESTOS.forEach((R, i) => { const r = o.restos[i]; if (r && typeof r === "object") c.restos[i] = { ouvert: i === 0 || !!r.ouvert, reussi: !!r.reussi, etoiles: n(r.etoiles, 3), argent: n(r.argent, 1e9), meilleur: n(r.meilleur, 1e9) }; });
+    RESTOS.forEach((R, i) => { const r = o.restos[i]; if (r && typeof r === "object") c.restos[i] = { ouvert: i === 0 || !!r.ouvert, reussi: !!r.reussi, etoiles: n(r.etoiles, 3), argent: n(r.argent, 1e9), meilleur: n(r.meilleur, 1e9), deco: decoLire(r.deco) }; });
     return c;
   }
 
@@ -700,8 +742,44 @@
   }
 
   // ------------------------------------------------------------------ dessin : décor et personnages
+  // déco du resto en cours de dessin (papier peint, nappes, objets) : posée par rendre() ou par l'aperçu de l'atelier
+  let decoRendu = null;
+  const nappeCache = {};
+  function tableImg(col) {                                       // table avec la nappe choisie (voile de couleur, mis en cache)
+    const base = img("table_" + col), id = decoRendu ? decoRendu.nappes : "origine", N = NAPPES.find((x) => x.id === id);
+    if (!base || !N || !N.voile) return base;
+    const k = col + "|" + id;
+    if (!nappeCache[k]) {
+      const c = document.createElement("canvas"); c.width = base.width; c.height = base.height;
+      const x = c.getContext("2d"); x.drawImage(base, 0, 0); x.globalCompositeOperation = "source-atop"; x.fillStyle = N.voile; x.fillRect(0, 0, c.width, c.height);
+      nappeCache[k] = c;
+    }
+    return nappeCache[k];
+  }
+  // murs tapissés de la salle : fond (avec la fenêtre-vitrine), mur gauche, mur droit — le lambris n'est pas touché
+  const MURS = [
+    [[155, 42], [1768, 42], [1768, 212], [1752, 212], [1738, 262], [1245, 262], [1232, 212], [155, 212]],
+    [[0, 8], [152, 42], [152, 215], [0, 322]],
+    [[1768, 42], [1920, 8], [1920, 322], [1768, 215]],
+  ];
+  function papierPeint(d) {
+    const P = d && PAPIERS.find((p) => p.id === d.papier);
+    if (!P || !P.tint) return;
+    ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = P.tint;
+    MURS.forEach((m) => { ctx.beginPath(); m.forEach((q, k) => (k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.fill(); });
+    ctx.restore();
+  }
+  function dessinerObjets(d) {                                   // les objets achetés (chacun à sa place sur le mur ou dans le coin)
+    if (!d) return;
+    const a = (id) => d.achats.includes("objet:" + id);
+    if (a("plante") && img("deco_plante")) dessiner("deco_plante", 100, 640, 0.34, 0.34, "bas");
+    if (a("lampe") && img("deco_lampe")) dessiner("deco_lampe", 1195 - img("deco_lampe").width * 0.4 / 2, 34, 0.4, 0.4, "haut");
+    if (a("horloge") && img("deco_horloge")) dessiner("deco_horloge", 1810 - img("deco_horloge").width * 0.4 / 2, 92, 0.4, 0.4, "haut");
+    if (a("ardoise") && img("deco_ardoise")) dessiner("deco_ardoise", ARDOISE.x - img("deco_ardoise").width * ARDOISE.s / 2, ARDOISE.y, ARDOISE.s, ARDOISE.s, "haut");
+  }
+  const ARDOISE = { x: 520, y: 50, s: 0.40 };      // mur du fond, à droite du tableau de bord (HUD) et au-dessus du passe-plats
   function dessinerTable(tb) {
-    const col = COULEURS[tb.i], g = GEOM[col], tab = img("table_" + col);
+    const col = COULEURS[tb.i], g = GEOM[col], tab = tableImg(col);
     if (!tab) return;
     const tx = tb.x - tab.width * S / 2, ty = TABLE_TOP;
     // chaise + client derrière la table
@@ -1445,6 +1523,7 @@
     texte(nbEtoilesGuide() + " étoile" + (nbEtoilesGuide() > 1 ? "s" : "") + " sur 3", 1400, 955, 26, "#f6e9cf", "center", "#5a3a29");
     BTN.reglages = bouton(W - 340, 28, 310, 70, "Réglages (R)", false, 30);
     BTN.carte = bouton(30, 112, 400, 62, "← Carte (Échap)", false, 26);
+    BTN.atelier = G.libre ? null : bouton(30, 190, 400, 62, "Atelier déco (D)", false, 26);
     BTN.cuisine = bouton(30, 28, 400, 70, G.cuisine ? "Cuisine : oui" : "Cuisine : non", !!G.cuisine, 30);
     texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
     if (G.cuisine) texte("Après quelques clients servis sans erreur, la cuisine s’ouvre : tu écris toi-même les plats !", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
@@ -1494,8 +1573,14 @@
       uniq.slice(0, 5).forEach((e, k) => texte(pv(e.pronom, e.verbe) + "   →   " + pv(e.pronom, e.bonne) + "   (" + e.regle.terminaison + ")", W / 2, 526 + k * 56, 40, "#fff", "center", "#5a3a29"));
     } else if (S_.rep) texte("Aucune erreur de forme, bravo !", W / 2, 520, 48, "#9be08f", "center", "#5a3a29");
     else texte("Aucune commande prise cette fois.", W / 2, 520, 44, "#f6e9cf", "center", "#5a3a29", "normal");
-    BTN.rejouer = bouton(W / 2 - 500, 840, 460, 120, "REJOUER", false);
-    BTN.carteFin = bouton(W / 2 + 40, 840, 460, 120, "CARTE", false);
+    if (S_.ctx.libre) {
+      BTN.rejouer = bouton(W / 2 - 500, 840, 460, 120, "REJOUER", false); BTN.atelierFin = null;
+      BTN.carteFin = bouton(W / 2 + 40, 840, 460, 120, "CARTE", false);
+    } else {
+      BTN.rejouer = bouton(W / 2 - 750, 840, 480, 120, "REJOUER", false);
+      BTN.atelierFin = bouton(W / 2 - 240, 840, 480, 120, "ATELIER DÉCO", false, 40);
+      BTN.carteFin = bouton(W / 2 + 270, 840, 480, 120, "CARTE", false);
+    }
     if (!S_.ctx.libre) texte(S_.ctx.titre + (S_.succes ? "   ·   succès de presse : " + S_.succes : "") + "   ·   total en poche : " + G.camp.argent + " pièces", W / 2, 1010, 30, "#f6e9cf", "center", "#5a3a29", "normal");
   }
 
@@ -1740,8 +1825,8 @@
     if (G.carteMsg && G.t < G.carteMsg.jusqu) { ctx.fillStyle = "rgba(60,30,20,0.85)"; rr(W / 2 - 700, 868, 1400, 64, 18); ctx.fill(); texte(G.carteMsg.texte, W / 2, 900, 28, "#fff"); }
     const y = 960, h = 74;
     BTN.cb = {
-      nom: bouton(40, y, 300, h, "Mon resto (N)", false, 28), presse: bouton(360, y, 320, h, "Revue de presse", false, 28), reglages: bouton(700, y, 300, h, "Réglages (R)", false, 28),
-      libre: bouton(1020, y, 400, h, "Entraînement libre (L)", false, 28), reset: bouton(1440, y, 440, h, G.t < G.resetT ? "Sûr ? Recliquer pour effacer" : "Nouvelle campagne", G.t < G.resetT, 26),
+      nom: bouton(40, y, 260, h, "Mon resto (N)", false, 26), presse: bouton(320, y, 290, h, "Revue de presse", false, 26), reglages: bouton(630, y, 250, h, "Réglages (R)", false, 26),
+      atelier: bouton(900, y, 320, h, "Atelier déco (D)", false, 27), libre: bouton(1240, y, 340, h, "Entraînement libre (L)", false, 25), reset: bouton(1600, y, 280, h, G.t < G.resetT ? "Sûr ? Recliquer" : "Nouvelle campagne", G.t < G.resetT, 23),
     };
     texte("Resto : " + (G.nom.length > 24 ? G.nom.slice(0, 23) + "…" : G.nom), 190, 1052, 22, "#fff", "center", "#5a3a29", "normal");
     texte("← → choisir · Espace ou Entrée : entrer dans le resto", 1100, 1052, 22, "#fff", "center", "#5a3a29", "normal");
@@ -1751,9 +1836,95 @@
     if (dans(b.nom, p)) { ouvrirNom(); sonClic(); }
     else if (dans(b.presse, p)) { ouvrir("presse"); sonClic(); }
     else if (dans(b.reglages, p)) { ouvrir("settings"); sonClic(); }
+    else if (dans(b.atelier, p)) ouvrirAtelier();
     else if (dans(b.libre, p)) entrainementLibre();
     else if (dans(b.reset, p)) { if (G.t < G.resetT) nouvelleCampagne(); else { G.resetT = G.t + 4; sonClic(); } }
     else { const m = (BTN.platCarte || []).find((q) => Math.hypot(p.x - q.c.x, p.y - q.c.y) < MED_R || dans(q.pr, p)); if (m) ouvrirResto(m.i); }
+  }
+
+  // ------------------------------------------------------------------ l'atelier déco (chantier 7c)
+  const AT = { rx: 40, ry: 300, rw: 700, rh: 88, pas: 98, ax: 780, ay: 130, aw: 1100 };       // lignes d'objets à gauche, aperçu de la salle à droite
+  function ouvrirAtelier() {
+    G.atelier = { resto: G.camp.restos[G.resto] && G.camp.restos[G.resto].ouvert ? G.resto : 0, onglet: 0, sel: 0, essai: null, msg: null };
+    ouvrir("atelier"); sonClic();
+  }
+  const itemsAtelier = () => CATALOGUE[G.atelier.onglet].liste;
+  const decoAtelier = () => G.camp.restos[G.atelier.resto].deco;
+  function decoAvecEssai(d, essai) {                              // aperçu : la déco du resto avec l'objet survolé en plus (sans l'acheter)
+    if (!essai) return d;
+    const c = { papier: d.papier, nappes: d.nappes, achats: d.achats.slice() };
+    if (essai.cle === "objet") { if (!c.achats.includes("objet:" + essai.id)) c.achats.push("objet:" + essai.id); } else c[essai.cle] = essai.id;
+    return c;
+  }
+  function acheterOuChoisir(cle, id) {                            // achat (si les pièces suffisent), ou pose d'un papier / d'une nappe déjà possédé
+    const A_ = G.atelier, i = A_.resto, d = G.camp.restos[i].deco, C = CATALOGUE.find((c) => c.cle === cle), it = C.liste.find((x) => x.id === id), prix = prixDeco(it.prix, i);
+    if (possede(d, cle, id)) {
+      if (cle === "objet") { A_.msg = { texte: "« " + it.nom + " » est déjà dans ton resto.", jusqu: G.t + 3 }; return; }
+      if (d[cle] !== id) { d[cle] = id; sauver(); sonClic(); }
+      return;
+    }
+    if (G.camp.argent < prix) { A_.msg = { texte: "Il te manque " + (prix - G.camp.argent) + " pièces pour « " + it.nom + " ». Rejoue un service pour en gagner !", jusqu: G.t + 4 }; sonKo(); return; }
+    G.camp.argent -= prix; d.achats.push(cle + ":" + id); if (cle !== "objet") d[cle] = id;
+    A_.msg = { texte: "Acheté : " + it.nom + " (− " + prix + " pièces).", jusqu: G.t + 3, ok: true }; sauver(); sonOk();
+  }
+  function changerRestoAtelier(i) {
+    if (!G.camp.restos[i].ouvert) { G.atelier.msg = { texte: "Verrouillé : réussis d’abord le resto précédent (succès de presse).", jusqu: G.t + 4 }; sonKo(); return; }
+    G.atelier.resto = i; G.atelier.sel = 0; sonClic();
+  }
+  function dessinerSalleApercu(i, d, x0, y0, w) {                 // la salle du resto i (tables vides) en miniature avec la déco d
+    const k = w / W, R = RESTOS[i], bgk = img(R.salle) ? R.salle : "bg_salle", avant = decoRendu;
+    ctx.save(); ctx.translate(x0, y0); ctx.scale(k, k); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    if (!dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
+    if (R.tint && bgk === "bg_salle") teinter(R.tint);
+    decoRendu = d; papierPeint(d); dessinerObjets(d);
+    dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
+    ORDRE_OUVERTURE.slice(0, R.tablesMax).sort((a, b) => a - b).forEach((t) => dessinerTable({ i: t, x: TABLE_X[t], client: null, plat: null, bulle: null }));
+    decoRendu = avant; ctx.restore();
+    ctx.lineWidth = 8; ctx.strokeStyle = "#5a3a29"; ctx.strokeRect(x0, y0, w, H * k);
+  }
+  function pastille(it, cle, x, y, r) {                           // petit visuel de l'objet dans la liste
+    if (cle === "objet") { const im = img(it.img); if (im) { const s = (2 * r) / Math.max(im.width, im.height); ctx.drawImage(im, x - im.width * s / 2, y - im.height * s / 2, im.width * s, im.height * s); } return; }
+    ctx.fillStyle = it.pastille; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = "#3b2415"; ctx.stroke();
+  }
+  function dessinerAtelier() {
+    const at = G.atelier, i = at.resto, R = RESTOS[i], d = G.camp.restos[i].deco, C = CATALOGUE[at.onglet];
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#f7e3b8"); g.addColorStop(1, "#e3b27a"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    texte("Atelier déco", 40, 70, 72, "#f6e9cf", "left", "#5a3a29");
+    texte(R.titre + " — prix × " + String(PRIX_RESTO[i]).replace(".", ","), 40, 138, 34, ENCRE(), "left", null, "normal");
+    texte(G.camp.argent + " pièces", W - 40, 62, 44, "#fff", "right", "#5a3a29");
+    dessiner("fx_piece", W - 40 - ctx.measureText(G.camp.argent + " pièces").width - 70, 18, 0.2, 0.2, "haut");
+    BTN.onglets = CATALOGUE.map((c, k) => bouton(40 + k * 240, 180, 225, 70, c.titre + " (" + (k + 1) + ")", at.onglet === k, 26));
+    // objets du catalogue
+    at.essai = null; BTN.items = [];
+    C.liste.forEach((it, k) => {
+      const y = AT.ry + k * AT.pas, prix = prixDeco(it.prix, i), a = possede(d, C.cle, it.id), pose = a && choisi(d, C.cle, it.id), peut = G.camp.argent >= prix;
+      const r = { x: AT.rx, y, w: AT.rw, h: AT.rh }, sur = dans(r, G.mouse); if (sur) at.sel = k;
+      const sel = at.sel === k;
+      if (sel) at.essai = { cle: C.cle, id: it.id };
+      ctx.fillStyle = pose ? "#e3f1d2" : sel ? "#fff6dc" : FOND(); rr(r.x, r.y, r.w, r.h, 18); ctx.fill(); ctx.strokeStyle = sel ? "#e8b33f" : "#5a3a29"; ctx.lineWidth = sel ? 7 : 4; ctx.stroke();
+      pastille(it, C.cle, r.x + 56, r.y + r.h / 2, 32);
+      texte(it.nom, r.x + 112, r.y + r.h / 2 + 2, 30, ENCRE(), "left");
+      if (pose) texte(C.cle === "objet" ? "✓ Dans ton resto" : "✓ Posé", r.x + r.w - 24, r.y + r.h / 2 + 2, 26, "#2f6a2f", "right");
+      else if (a) texte("Poser", r.x + r.w - 24, r.y + r.h / 2 + 2, 28, "#8a3b1f", "right");
+      else texte(prix + " pièces", r.x + r.w - 24, r.y + r.h / 2 + 2, 28, peut ? "#2f6a2f" : "#a82e24", "right");
+      BTN.items.push(Object.assign(r, { cle: C.cle, id: it.id }));
+    });
+    // aperçu en direct : la salle de ce resto avec l'objet survolé
+    dessinerSalleApercu(i, decoAvecEssai(d, at.essai), AT.ax, AT.ay, AT.aw);
+    texte(at.essai && !possede(d, at.essai.cle, at.essai.id) ? "Aperçu — pas encore acheté" : "Ta salle", AT.ax + AT.aw / 2, AT.ay + 619 + 34, 28, ENCRE(), "center", null, "normal");
+    // choix du resto
+    BTN.restosAt = RESTOS.map((Rk, k) => { const ouv = G.camp.restos[k].ouvert; const b = bouton(AT.ax + k * 280, 840, 265, 70, ouv ? (k + 1) + ". " + Rk.titre : (k + 1) + ". Verrouillé", i === k, 23); if (!ouv) { ctx.fillStyle = "rgba(60,40,30,0.45)"; rr(b.x, b.y, b.w, b.h, 20); ctx.fill(); } return b; });
+    texte("Ici, les pièces rapportent × " + String(R.coef).replace(".", ",") + " mais la déco coûte × " + String(PRIX_RESTO[i]).replace(".", ",") + " : rejoue chaque resto pour t’équiper !", AT.ax + AT.aw / 2, 950, 24, ENCRE(), "center", null, "normal");
+    if (at.msg && G.t < at.msg.jusqu) { ctx.fillStyle = at.msg.ok ? "rgba(47,106,47,0.92)" : "rgba(60,30,20,0.88)"; rr(490, 988, 1390, 60, 18); ctx.fill(); texte(at.msg.texte, 1185, 1019, 28, "#fff"); }
+    BTN.retourAt = bouton(40, 988, 420, 70, "← Retour (Échap)", false, 28);
+    texte("↑ ↓ choisir · Entrée : acheter · ← → : changer de resto", 1240, 1062, 20, ENCRE(), "center", null, "normal");
+  }
+  function clicAtelier(p) {
+    const at = G.atelier;
+    if (dans(BTN.retourAt, p)) { G.mode = G.retourDe && G.retourDe !== "atelier" ? G.retourDe : "carte"; sonClic(); return; }
+    const o = (BTN.onglets || []).findIndex((b) => dans(b, p)); if (o >= 0) { at.onglet = o; at.sel = 0; sonClic(); return; }
+    const r = (BTN.restosAt || []).findIndex((b) => dans(b, p)); if (r >= 0) { changerRestoAtelier(r); return; }
+    const it = (BTN.items || []).find((b) => dans(b, p)); if (it) acheterOuChoisir(it.cle, it.id);
   }
 
   // ------------------------------------------------------------------ rendu
@@ -1761,10 +1932,13 @@
     ctx.clearRect(0, 0, W, H);
     if (G.mode === "accueil") { dessinerAccueil(); return; }
     if (G.mode === "carte") { dessinerCarte(); return; }
+    if (G.mode === "atelier") { dessinerAtelier(); return; }
     const enCuisine = !!S_ && G.vue === "cuisine" && (G.mode === "play" || G.mode === "over");
     const R_ = S_ && (G.mode === "play" || G.mode === "over") ? S_.ctx : null, bgk = R_ && R_.salle && img(R_.salle) ? R_.salle : "bg_salle";
     if (!enCuisine && !dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (!enCuisine && R_ && R_.tint && bgk === "bg_salle") teinter(R_.tint);
+    decoRendu = G.camp.restos[R_ && R_.id >= 0 ? R_.id : G.resto].deco;          // entraînement libre : déco du resto choisi
+    if (!enCuisine && R_) papierPeint(decoRendu);
     if (G.mode === "title") { dessinerTitre(); return; }
     if (G.mode === "settings") { dessinerReglages(); return; }
     if (G.mode === "nom") { dessinerNom(); return; }
@@ -1773,11 +1947,7 @@
     if (!S_) return;
     if (enCuisine) dessinerCuisine();
     else {
-      if (img("deco_plante")) {                                          // déco d'ambiance sur le mur et dans le coin
-        dessiner("deco_plante", 100, 640, 0.34, 0.34, "bas");
-        dessiner("deco_lampe", 1195 - img("deco_lampe").width * 0.4 / 2, 34, 0.4, 0.4, "haut");
-        dessiner("deco_horloge", 1810 - img("deco_horloge").width * 0.4 / 2, 92, 0.4, 0.4, "haut");
-      }
+      dessinerObjets(decoRendu);                                         // objets achetés à l'atelier
       // passe-plats et plats prêts
       dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
       if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH.x + 27, HATCH.y + 2, 387, 168, 14); ctx.stroke(); ctx.restore(); }
@@ -1806,12 +1976,14 @@
   function clic(p) {
     if (G.mode === "accueil") { actionAccueil(p); return; }
     if (G.mode === "carte") { clicCarte(p); return; }
+    if (G.mode === "atelier") { clicAtelier(p); return; }
     if (G.mode === "title") {
       if (dans(BTN.normal, p)) { G.chrono = "normal"; sauver(); } else if (dans(BTN.lent, p)) { G.chrono = "lent"; sauver(); } else if (dans(BTN.sans, p)) { G.chrono = "sans"; sauver(); }
       else if (BTN.groupe && BTN.groupe.some((b, k) => dans(b, p) && (G.groupe = k) >= 0)) { sauver(); sonClic(); }
       else if (BTN.duree && BTN.duree.some((b, k) => dans(b, p) && (G.duree = DUREES[k]) >= 0)) { sauver(); sonClic(); }
       else if (dans(BTN.reglages, p)) { ouvrir("settings"); sonClic(); }
       else if (dans(BTN.carte, p)) { G.mode = "carte"; sonClic(); }
+      else if (BTN.atelier && dans(BTN.atelier, p)) ouvrirAtelier();
       else if (dans(BTN.cuisine, p)) { G.cuisine = G.cuisine ? 0 : 1; sauver(); sonClic(); }
       else if (dans(BTN.jouer, p)) { nouvellePartie(); sonClic(); }
       else if (dans(BTN.nom, p)) { ouvrirNom(); sonClic(); }
@@ -1835,7 +2007,7 @@
       else if (dans(BTN.retour, p)) { G.mode = G.retourDe || "title"; sonClic(); }
       return;
     }
-    if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } else if (dans(BTN.carteFin, p)) { G.mode = "carte"; sonClic(); } return; }
+    if (G.mode === "over") { if (dans(BTN.rejouer, p)) { nouvellePartie(); sonClic(); } else if (BTN.atelierFin && dans(BTN.atelierFin, p)) ouvrirAtelier(); else if (dans(BTN.carteFin, p)) { G.mode = "carte"; sonClic(); } return; }
     if (S_ && S_.article) { if (S_.article.t > 0.8) fermerArticle(); return; }
     if (G.paused) { G.paused = false; sonClic(); return; }                   // n'importe quel clic reprend la partie
     if (G.trans) return;
@@ -1897,7 +2069,19 @@
       else if (k === "Enter" || k === " ") { e.preventDefault(); ouvrirResto(G.carteSel); }
       else if (k === "l" || k === "L") { entrainementLibre(); }
       else if (k === "r" || k === "R") ouvrir("settings");
+      else if (k === "d" || k === "D") ouvrirAtelier();
       else if (k === "n" || k === "N") { e.preventDefault(); ouvrirNom(); }
+      return;
+    }
+    if (G.mode === "atelier") {
+      const at = G.atelier, n = itemsAtelier().length;
+      if (k === "Escape") { e.preventDefault(); G.mode = G.retourDe && G.retourDe !== "atelier" ? G.retourDe : "carte"; sonClic(); }
+      else if (k === "ArrowDown") { e.preventDefault(); at.sel = (at.sel + 1) % n; sonClic(); }
+      else if (k === "ArrowUp") { e.preventDefault(); at.sel = (at.sel + n - 1) % n; sonClic(); }
+      else if (k === "ArrowRight") { e.preventDefault(); for (let j = 1; j <= RESTOS.length; j++) { const t = (at.resto + j) % RESTOS.length; if (G.camp.restos[t].ouvert) { changerRestoAtelier(t); break; } } }
+      else if (k === "ArrowLeft") { e.preventDefault(); for (let j = 1; j <= RESTOS.length; j++) { const t = (at.resto + RESTOS.length - j) % RESTOS.length; if (G.camp.restos[t].ouvert) { changerRestoAtelier(t); break; } } }
+      else if (k === "Enter" || k === " ") { e.preventDefault(); const it = itemsAtelier()[at.sel]; if (it) acheterOuChoisir(CATALOGUE[at.onglet].cle, it.id); }
+      else if (k === "1" || k === "2" || k === "3") { at.onglet = Number(k) - 1; at.sel = 0; sonClic(); }
       return;
     }
     if (G.mode === "nom") {                                           // saisie du nom du resto (le champ caché reçoit les lettres)
@@ -1917,6 +2101,7 @@
       if (k === "Enter" || k === " ") { e.preventDefault(); nouvellePartie(); sonClic(); }
       else if (k === "r" || k === "R") ouvrir("settings");
       else if (k === "n" || k === "N") { e.preventDefault(); ouvrirNom(); }
+      else if (k === "d" || k === "D") { if (!G.libre) ouvrirAtelier(); }
       else if (k === "Escape") { G.mode = "carte"; sonClic(); }
       return;
     }
@@ -1974,7 +2159,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, ACCU, RESTOS, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, ACCU, RESTOS, PAPIERS, NAPPES, OBJETS, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k] && !/^bg_(carte|titre_\d|salle_\d)$/.test(k)); },
   };
