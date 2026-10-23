@@ -119,11 +119,16 @@
 
   // ------------------------------------------------------------------ la campagne (chantier 7b) : 4 restaurants
   // groupes : verbes proposés (null = tous) ; debut/fin : niveaux de verbes ; coef : multiplicateur de pièces ; tint : teinte provisoire des images du village
+  // Murs tapissés des salles 2 à 4 (mesurés sur les images de Julie, repère 1365×768 ramené à 1920×1080) : pans à teinter par le papier peint,
+  // et « trous » (rideaux des fenêtres) qui restent intacts. Sans image de salle, le jeu utilise les murs du village (MURS).
+  const E = (pts) => pts.map((q) => [Math.round(q[0] * 1920 / 1365), Math.round(q[1] * 1080 / 768)]);
+  const MURS_BRASSERIE = { pans: [E([[108, 103], [1257, 103], [1257, 255], [1232, 290], [885, 290], [862, 255], [108, 255]]), E([[0, 52], [108, 103], [108, 255], [0, 335]]), E([[1257, 103], [1365, 52], [1365, 335], [1257, 255]])], trous: [] };
+  const MURS_SALON = (fenetres) => ({ pans: [E([[108, 72], [1257, 72], [1257, 312], [108, 312]]), E([[0, 62], [108, 72], [108, 312], [0, 365]]), E([[1257, 72], [1365, 62], [1365, 365], [1257, 312]])], trous: fenetres.map((f) => E([[f[0], 88], [f[1], 88], [f[1], 312], [f[0], 312]])) });
   const RESTOS = [
     { id: 0, titre: "Bistrot de village", lieu: "Petit village de campagne", enseigne: ["Au passé", "pas si simple"], groupes: [1], debut: 1, fin: 5, tablesDepart: 2, tablesMax: 4, coef: 1, contenu: "1er groupe", tint: null, facade: "bg_titre", salle: "bg_salle" },
-    { id: 1, titre: "Brasserie de la ville", lieu: "La ville", enseigne: ["La Brasserie", "du Passé"], groupes: [1, 2], debut: 6, fin: 6, tablesDepart: 3, tablesMax: 5, coef: 1.5, contenu: "2e groupe + rappel du 1er", tint: "#a9cbb8", facade: "bg_titre_2", salle: "bg_salle_2" },
-    { id: 2, titre: "Grand restaurant", lieu: "La grande ville", enseigne: ["Le Grand", "Passé Simple"], groupes: [1, 2, 3], debut: 7, fin: 9, tablesDepart: 4, tablesMax: 6, coef: 2, contenu: "3e groupe + rappel", tint: "#c3b0dc", facade: "bg_titre_3", salle: "bg_salle_3" },
-    { id: 3, titre: "Le Palace", lieu: "La capitale", enseigne: ["LE PALACE", "du Passé Simple"], groupes: [1, 2, 3], debut: 10, fin: 10, tablesDepart: 5, tablesMax: 6, coef: 3, contenu: "Tous les groupes, irréguliers", tint: "#f0d27a", facade: "bg_titre_4", salle: "bg_salle_4" },
+    { id: 1, titre: "Brasserie de la ville", lieu: "La ville", enseigne: ["La Brasserie", "du Passé"], groupes: [1, 2], debut: 6, fin: 6, tablesDepart: 3, tablesMax: 5, coef: 1.5, contenu: "2e groupe + rappel du 1er", tint: "#a9cbb8", facade: "bg_titre_2", salle: "bg_salle_2", murs: MURS_BRASSERIE },
+    { id: 2, titre: "Grand restaurant", lieu: "La grande ville", enseigne: ["Le Grand", "Passé Simple"], groupes: [1, 2, 3], debut: 7, fin: 9, tablesDepart: 4, tablesMax: 6, coef: 2, contenu: "3e groupe + rappel", tint: "#c3b0dc", facade: "bg_titre_3", salle: "bg_salle_3", murs: MURS_SALON([[738, 988]]) },
+    { id: 3, titre: "Le Palace", lieu: "La capitale", enseigne: ["LE PALACE", "du Passé Simple"], groupes: [1, 2, 3], debut: 10, fin: 10, tablesDepart: 5, tablesMax: 6, coef: 3, contenu: "Tous les groupes, irréguliers", tint: "#f0d27a", facade: "bg_titre_4", salle: "bg_salle_4", murs: MURS_SALON([[560, 815], [1000, 1250]]) },
   ];
   // ------------------------------------------------------------------ l'atelier déco (chantier 7c)
   // Chaque resto a sa propre déco, payée avec les pièces de la campagne (G.camp.argent). Les prix de base ci-dessous sont ceux du bistrot ;
@@ -762,11 +767,17 @@
     [[0, 8], [152, 42], [152, 215], [0, 322]],
     [[1768, 42], [1920, 8], [1920, 322], [1768, 215]],
   ];
-  function papierPeint(d) {
+  function mursDe(i) {                                           // pans de mur à tapisser : ceux de l'image du resto si elle est là, sinon ceux du village
+    const R = RESTOS[i];
+    return R && R.murs && img(R.salle) ? R.murs : { pans: MURS, trous: [] };
+  }
+  function papierPeint(d, i) {
     const P = d && PAPIERS.find((p) => p.id === d.papier);
     if (!P || !P.tint) return;
+    const M = mursDe(i);
     ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = P.tint;
-    MURS.forEach((m) => { ctx.beginPath(); m.forEach((q, k) => (k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.fill(); });
+    const trace = (m) => { m.forEach((q, k) => (k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); };
+    M.pans.forEach((m, k) => { ctx.beginPath(); trace(m); if (k === 0) M.trous.forEach(trace); ctx.fill("evenodd"); });          // les rideaux (trous du pan du fond) ne sont pas teintés
     ctx.restore();
   }
   function dessinerObjets(d) {                                   // les objets achetés (chacun à sa place sur le mur ou dans le coin)
@@ -777,7 +788,7 @@
     if (a("horloge") && img("deco_horloge")) dessiner("deco_horloge", 1810 - img("deco_horloge").width * 0.4 / 2, 92, 0.4, 0.4, "haut");
     if (a("ardoise") && img("deco_ardoise")) dessiner("deco_ardoise", ARDOISE.x - img("deco_ardoise").width * ARDOISE.s / 2, ARDOISE.y, ARDOISE.s, ARDOISE.s, "haut");
   }
-  const ARDOISE = { x: 520, y: 50, s: 0.40 };      // mur du fond, à droite du tableau de bord (HUD) et au-dessus du passe-plats
+  const ARDOISE = { x: 790, y: 196, s: 0.40 };      // mur du fond, entre la porte de la cuisine et la fenêtre (sous le rail des tickets)
   function dessinerTable(tb) {
     const col = COULEURS[tb.i], g = GEOM[col], tab = tableImg(col);
     if (!tab) return;
@@ -1747,9 +1758,13 @@
   // ------------------------------------------------------------------ la carte de la campagne (chantier 7b)
   function teinter(col) { ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = col; ctx.fillRect(0, 0, W, H); ctx.restore(); }
   const ouvrir = (mode) => { G.retourDe = G.mode; G.mode = mode; };
-  const CARTE = [{ x: 300, y: 700 }, { x: 700, y: 560 }, { x: 1130, y: 430 }, { x: 1560, y: 310 }];   // centres des médaillons
-  const MED_R = 92;
-  const platRect = (i) => ({ x: CARTE[i].x - 180, y: CARTE[i].y + 104, w: 360, h: 146 });
+  // centres des médaillons (x, y) et des plaques (pl). Sans image de carte : route dessinée par le jeu, plaques sous les médaillons.
+  // Avec assets/bg_carte.jpg (route et lieux peints) : médaillons posés sur le village, la petite ville, la grande ville et la capitale de l'image.
+  const CARTE_DEF = [{ x: 300, y: 700 }, { x: 700, y: 560 }, { x: 1130, y: 430 }, { x: 1560, y: 310 }].map((c) => Object.assign(c, { pl: { x: c.x, y: c.y + 152 } }));
+  const CARTE_IMG = [{ x: 372, y: 790, pl: { x: 392, y: 612 } }, { x: 759, y: 600, pl: { x: 759, y: 762 } }, { x: 1343, y: 425, pl: { x: 1625, y: 568 } }, { x: 1526, y: 232, pl: { x: 1130, y: 218 } }];
+  const carteGeo = () => (img("bg_carte") ? CARTE_IMG : CARTE_DEF);
+  const MED_R = 92, PLAQUE = { w: 340, h: 96 };
+  const platRect = (i) => { const q = carteGeo()[i].pl; return { x: q.x - PLAQUE.w / 2, y: q.y - PLAQUE.h / 2, w: PLAQUE.w, h: PLAQUE.h }; };
   function ouvrirResto(i) {
     const r = G.camp.restos[i];
     if (!r.ouvert) { G.carteMsg = { texte: "Verrouillé : obtiens un succès de presse (barre de réputation pleine) au resto « " + RESTOS[i - 1].titre + " ».", jusqu: G.t + 5 }; sonKo(); return; }
@@ -1788,7 +1803,7 @@
     [[1700, 120, 50], [1760, 70, 40], [1820, 150, 60], [1880, 100, 40]].forEach((b) => ctx.fillRect(b[0], 360 - b[1], b[2], b[1]));
   }
   function routeCarte() {
-    const pts = [{ x: -60, y: 860 }].concat(CARTE, [{ x: 1990, y: 200 }]);
+    const pts = [{ x: -60, y: 860 }].concat(CARTE_DEF, [{ x: 1990, y: 200 }]);
     const trace = () => {
       ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 0; i < pts.length - 1; i++) {
@@ -1802,27 +1817,32 @@
     trace(); ctx.strokeStyle = "#c98f4c"; ctx.lineWidth = 4; ctx.setLineDash([22, 22]); ctx.stroke(); ctx.setLineDash([]);
   }
   function dessinerCarte() {
-    decorCarte(); routeCarte();
-    texte("La route du Palace", W / 2, 84, 84, "#f6e9cf", "center", "#5a3a29");
-    texte("Un succès de presse (barre de réputation pleine) ouvre le restaurant suivant.", W / 2, 158, 30, "#fff", "center", "#5a3a29", "normal");
+    decorCarte(); if (!img("bg_carte")) routeCarte();                   // avec l'image de la carte, la route est peinte
+    texte("La route du Palace", 760, 84, 76, "#f6e9cf", "center", "#5a3a29");
+    texte("Un succès de presse (barre pleine) ouvre le resto suivant.", 700, 150, 28, "#fff", "center", "#5a3a29", "normal");
     dessiner("fx_piece", 40, 26, 0.22, 0.22, "haut"); texte(G.camp.argent + " pièces", 124, 62, 40, "#fff", "left", "#5a3a29");
     { const n = nbEtoilesGuide(); for (let k = 0; k < 3; k++) { ctx.save(); ctx.globalAlpha = k < n ? 1 : 0.3; dessiner("fx_etoile", 62 + k * 46, 128, 0.12, 0.12, "centre"); ctx.restore(); } }
     BTN.platCarte = [];
     RESTOS.forEach((R, i) => {
-      const c = CARTE[i], st = G.camp.restos[i], verrou = !st.ouvert, pr = platRect(i);
+      const c = carteGeo()[i], st = G.camp.restos[i], verrou = !st.ouvert, pr = platRect(i);
       if (G.mouse.x !== undefined && (Math.hypot(G.mouse.x - c.x, G.mouse.y - c.y) < MED_R || dans(pr, G.mouse))) G.carteSel = i;
       const sel = G.carteSel === i, rr_ = MED_R * (sel && !A.calme ? 1.06 : 1);
       ctx.fillStyle = "rgba(60,30,20,0.25)"; ctx.beginPath(); ctx.ellipse(c.x, c.y + MED_R + 6, MED_R, 18, 0, 0, 7); ctx.fill();
       vignetteResto(i, c.x, c.y, rr_, verrou, sel);
       ctx.fillStyle = sel ? "#fff6dc" : FOND(); rr(pr.x, pr.y, pr.w, pr.h, 20); ctx.fill(); ctx.strokeStyle = sel ? "#e8b33f" : "#5a3a29"; ctx.lineWidth = sel ? 7 : 5; ctx.stroke();
-      texte((i + 1) + ". " + R.titre, c.x, pr.y + 28, 30, ENCRE());
-      texte(R.contenu, c.x, pr.y + 62, 21, ENCRE(), "center", null, "normal");
-      texte("pièces × " + String(R.coef).replace(".", ",") + "  ·  " + R.tablesMax + " tables", c.x, pr.y + 90, 21, ENCRE(), "center", null, "normal");
-      if (verrou) { texte("Verrouillé", c.x, pr.y + 118, 24, "#8a3b1f"); }
-      else texte((st.reussi ? "★ Succès de presse  ·  " : "") + st.argent + " pièces gagnées" + (st.etoiles ? "  ·  " + "★".repeat(st.etoiles) : ""), c.x, pr.y + 118, 21, "#4c8c4a");
+      const px_ = pr.x + pr.w / 2;
+      texte((i + 1) + ". " + R.titre, px_, pr.y + 33, 29, ENCRE());
+      if (verrou) texte("Verrouillé", px_, pr.y + 70, 24, "#8a3b1f");
+      else texte((st.reussi ? "★ " : "") + st.argent + " pièces gagnées" + (st.etoiles ? "  ·  " + "★".repeat(st.etoiles) : ""), px_, pr.y + 70, 23, "#2f6a2f");
       BTN.platCarte.push({ i, c, pr });
     });
     if (G.carteMsg && G.t < G.carteMsg.jusqu) { ctx.fillStyle = "rgba(60,30,20,0.85)"; rr(W / 2 - 700, 868, 1400, 64, 18); ctx.fill(); texte(G.carteMsg.texte, W / 2, 900, 28, "#fff"); }
+    else {                                                              // détails du resto sélectionné (la plaque ne garde que le nom et l'état)
+      const Rs = RESTOS[G.carteSel] || RESTOS[0];
+      ctx.fillStyle = "rgba(255,246,220,0.93)"; rr(500, 866, 920, 80, 18); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
+      texte(Rs.titre + " — " + Rs.lieu, W / 2 - 20, 892, 28, ENCRE());
+      texte(Rs.contenu + "  ·  pièces × " + String(Rs.coef).replace(".", ",") + "  ·  " + Rs.tablesDepart + " à " + Rs.tablesMax + " tables", W / 2 - 20, 926, 23, ENCRE(), "center", null, "normal");
+    }
     const y = 960, h = 74;
     BTN.cb = {
       nom: bouton(40, y, 260, h, "Mon resto (N)", false, 26), presse: bouton(320, y, 290, h, "Revue de presse", false, 26), reglages: bouton(630, y, 250, h, "Réglages (R)", false, 26),
@@ -1876,7 +1896,7 @@
     ctx.save(); ctx.translate(x0, y0); ctx.scale(k, k); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
     if (!dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (R.tint && bgk === "bg_salle") teinter(R.tint);
-    decoRendu = d; papierPeint(d); dessinerObjets(d);
+    decoRendu = d; papierPeint(d, i); dessinerObjets(d);
     dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
     ORDRE_OUVERTURE.slice(0, R.tablesMax).sort((a, b) => a - b).forEach((t) => dessinerTable({ i: t, x: TABLE_X[t], client: null, plat: null, bulle: null }));
     decoRendu = avant; ctx.restore();
@@ -1937,8 +1957,8 @@
     const R_ = S_ && (G.mode === "play" || G.mode === "over") ? S_.ctx : null, bgk = R_ && R_.salle && img(R_.salle) ? R_.salle : "bg_salle";
     if (!enCuisine && !dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (!enCuisine && R_ && R_.tint && bgk === "bg_salle") teinter(R_.tint);
-    decoRendu = G.camp.restos[R_ && R_.id >= 0 ? R_.id : G.resto].deco;          // entraînement libre : déco du resto choisi
-    if (!enCuisine && R_) papierPeint(decoRendu);
+    const di = R_ && R_.id >= 0 ? R_.id : G.resto; decoRendu = G.camp.restos[di].deco;          // entraînement libre : déco du resto choisi
+    if (!enCuisine && R_) papierPeint(decoRendu, di);
     if (G.mode === "title") { dessinerTitre(); return; }
     if (G.mode === "settings") { dessinerReglages(); return; }
     if (G.mode === "nom") { dessinerNom(); return; }
@@ -2159,7 +2179,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, ACCU, RESTOS, PAPIERS, NAPPES, OBJETS, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, ACCU, RESTOS, carteGeo, mursDe, PAPIERS, NAPPES, OBJETS, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k] && !/^bg_(carte|titre_\d|salle_\d)$/.test(k)); },
   };

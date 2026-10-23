@@ -27,6 +27,8 @@ Ouvre `index.html` dans un navigateur (Chrome, Edge, Firefox). Aucun serveur n'e
 
 Clic (ou ← → puis Espace) sur un resto : l'animation d'accueil se rejoue devant sa façade, puis l'écran titre (vitesse, type de partie, cuisine). Le succès de presse donne aussi une prime de 50 pièces × coefficient et l'article du journal (★1 village, ★2 brasserie, ★3 grand resto ; le Palace garde l'article des 3 étoiles en attendant la finale du chantier 7e). **Entraînement libre (L)** : l'ancien menu avec choix des groupes, sans pièces ni progression. **Nouvelle campagne** (2 clics) efface progression, pièces et articles (poste partagé). Tout est mémorisé dans le navigateur.
 **Atelier déco (chantier 7c)** : bouton « Atelier déco (D) » sur la carte, sur l'écran titre d'un resto et en fin de partie. Les pièces gagnées achètent, pour **chaque resto séparément**, un papier peint (6 teintes), des nappes (pastel, dorées, velours) et des objets (plante, lampe, horloge, ardoise du jour) ; la salle est nue au départ. L'aperçu de la salle se met à jour quand on survole un article ; un papier ou des nappes déjà achetés se reposent gratuitement. Les prix de base sont ceux du bistrot, × 2 à la brasserie, × 3,5 au grand resto, × 6 au Palace (les pièces rapportent × 1, 1,5, 2, 3). Tout se règle en haut de la section « atelier » de `js/game.js` (`PRIX_RESTO`, `PAPIERS`, `NAPPES`, `OBJETS`). Clavier : ↑ ↓ choisir, Entrée acheter, ← → changer de resto, 1 2 3 onglets, Échap retour.
+Salles 2 à 4 et carte : images déjà en place (`bg_salle_2/3/4.png`, `bg_carte.jpg`) ; restent les façades `bg_titre_2/3/4.jpg`. Avec `bg_carte.jpg`, la route et les lieux sont peints et les médaillons se posent dessus ; sans, le jeu dessine sa propre route.
+Les prompts de ces images et l'outil de préparation sont dans `docs/PROMPTS_7D.md` et `tools/preparer_7d.py`.
 Images facultatives (chantier 7d) : `assets/bg_titre_2.jpg`, `_3`, `_4` (façades, pancarte vierge au même endroit que `bg_titre`), `assets/bg_salle_2.png`, `_3`, `_4`, `assets/bg_carte.jpg`. Absentes, le jeu teinte les images du village.
 
 **Accueil** : le jeu s'ouvre sur la façade du bistrot : le serveur arrive, la pancarte « Au passé pas si simple » s'écrit, puis un panneau OUVERT tombe sur la porte : on clique dessus (ou Espace) pour entrer. Un clic passe l'animation ; avec le réglage « Animations : calmes » elle s'affiche directement terminée.
@@ -79,6 +81,7 @@ Réglages à ajuster dans `js/game.js` (en haut du fichier) quand les vrais pers
 - `tools/test_conjugaison.js` : test de toutes les formes contre la table de référence (`node tools/test_conjugaison.js`)
 - `tools/test_jeu.py` : parcours automatique dans Chromium, salle seule (`python3 -I tools/test_jeu.py . captures`)
 - `tools/test_cuisine.py` : parcours salle → cuisine → service, saisie au vrai clavier, erreurs, joueur parfait (`python3 -I tools/test_cuisine.py . captures`)
+- `tools/preparer_7d.py` : recadrage, format et contrôles des images des restos 2 à 4 et de la carte
 - `tools/extract_cuisine.py` : détourage et découpe de `postes.png`, `chef.png`, `cuisine_deco.png` vers `assets/cuisine/`
 - `js/game.js` : moteur du jeu, dessin, interface
 - `js/geometrie.js` : mesures des tables (plateau, nappe) pour poser les plats
