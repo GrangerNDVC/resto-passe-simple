@@ -29,7 +29,7 @@
   CLIENTS.concat(Object.keys(NOUVEAUX)).forEach((c) => { LISTE[c + "_attente"] = "assets/clients/" + c + "_attente.png"; LISTE[c + "_appel"] = "assets/clients/" + c + "_appel.png"; });
   Object.keys(NOUVEAUX).forEach((c) => (LISTE[c + "_calques"] = "assets/clients/" + c + "_calques.png"));
   ["chaise_brasserie", "chaise_gala", "chaise_palace", "deco_applique", "deco_desserte"].forEach((n) => (LISTE[n] = "assets/salle/" + n + ".png"));
-  // (chantier 8B) les images des objets, des tables, des chaises et des passe-plats sont ajoutées à LISTE plus bas, d'après le catalogue
+  ["deco_cadre_fleurs", "deco_miroir", "deco_tete_cerf", "deco_lustre", "deco_rideaux", "deco_plante_haute", "deco_portemanteau", "deco_vitrine", "deco_comptoir_gateaux", "deco_statue", "deco_piano"].forEach((n) => (LISTE[n] = "assets/salle/" + n + ".png"));
   for (let i = 1; i <= 6; i++) LISTE["serveur_marche_" + i] = "assets/serveur/serveur_marche_" + i + ".png";
   ["serveur_idle", "serveur_depose", "serveur_content", "serveur_oups"].forEach((n) => (LISTE[n] = "assets/serveur/" + n + ".png"));
   // cuisine : décor existant + dessins facultatifs (remplacés par des dessins provisoires en code tant qu'ils manquent)
@@ -55,28 +55,25 @@
   const ORDRE_OUVERTURE = [2, 3, 1, 4, 0, 5];
   const CLIENT_CUT_Y = TABLE_TOP + 120 * S - 16;   // bord bas du client, caché derrière la nappe
   const Y_COULOIR = 880;                   // pieds du serveur dans le couloir
-  // Chantier 8A : passe-plats recalibré (image 463×281 réduite à 74 %, collée au mur du fond : le bas du comptoir tombe sur la plinthe) ; tout le reste en découle.
-  const HATCH_IMG = { w: 463, h: 246 }, HS = 0.74;       // h = 246 : on ne garde que l'ouverture et le rebord (le bloc-comptoir de l'image se lisait comme une boîte posée devant le mur)
-  const HATCH = { x: 190, y: 150, s: HS };
-  const HATCH_RECT = { x: HATCH.x, y: HATCH.y, w: Math.round(HATCH_IMG.w * HS), h: Math.round(HATCH_IMG.h * HS) };      // zone cliquable
-  const HATCH_STAND = { x: HATCH.x + HATCH_RECT.w + 32, y: 455 };  // serveur au passe-plats (à droite du comptoir pour ne pas cacher les assiettes)
-  const HATCH_PLATE = { x: Math.round(HATCH.x + 231.6 * HS), y: Math.round(HATCH.y + 219 * HS) };  // plats posés sur le comptoir
-  const HATCH_OUV = { x: HATCH.x + 28.4 * HS, y: HATCH.y + 2.1 * HS, w: 407 * HS, h: 177 * HS };    // ouverture (liseré jaune quand une commande attend)
+  const HATCH = { x: 152, y: 172, s: 0.95 };                  // passe-plats : creusé dans le mur du fond (remonté et agrandi au chantier 5)
+  const HATCH_RECT = { x: 152, y: 172, w: 440, h: 267 };      // zone cliquable
+  const HATCH_STAND = { x: 612, y: 478 };  // serveur au passe-plats (à droite du comptoir pour ne pas cacher les assiettes)
+  const HATCH_PLATE = { x: 372, y: 380 };  // plats posés sur le comptoir
   const STAND_DX = -140;                   // le serveur se place à gauche de la table (il ne cache pas le client)
-  const HATCH_ZONE = { x: HATCH.x + Math.round(HATCH_RECT.w / 2), portee: 220 };   // au clavier : se placer dans cette zone du couloir, puis Espace
+  const HATCH_ZONE = { x: 372, portee: 220 };   // au clavier : se placer dans cette zone du couloir, puis Espace
   const SERVEUR_H = 370;                   // hauteur du serveur au premier plan (les tables sont plus loin : il doit être plus grand qu'elles)
   const TRAY = { x: 62 * SERVEUR_H / 300, y: -232 * SERVEUR_H / 300 };   // plateau du serveur (repère local, serveur tourné vers la droite)
-  const CLIENT_W = 180;                    // largeur de la toile du client (chantier 5 : 230 → 200 ; chantier 8C : 200 → 180, encore 10 % trop grands face au serveur)
+  const CLIENT_W = 200;                    // largeur de la toile du client (chantier 5 : 230 → 200, les clients paraissaient trop grands face au serveur)
   const CLIENT_ECH = { client_01_garcon: 0.86, client_02_papy: 1.15, client_03_bouclee: 0.88, client_04_blonde: 0.85, client_05_mamie: 0.9, client_06_moustachu: 1.32, client_07_critique: 1.05 };   // 7d+ : jeunes femmes et enfant réduits, moustachu agrandi
   const CLIENT_DY = { client_06_moustachu: -8 };                // décalage vertical (négatif = remonte) : le moustachu ne doit pas s'enfoncer dans la table   // même taille de tête pour tous
   const PERS_LONG = ["1re personne du singulier", "2e personne du singulier", "3e personne du singulier", "1re personne du pluriel", "2e personne du pluriel", "3e personne du pluriel"];
   const PERS_COURT = [["1re pers.", "du sing."], ["2e pers.", "du sing."], ["3e pers.", "du sing."], ["1re pers.", "du plur."], ["2e pers.", "du plur."], ["3e pers.", "du plur."]];
-  const MAIN_GAUCHE = ["client_01_garcon", "client_03_bouclee", "client_06_moustachu", "client_13_soiree"];   // clients dont la main levée est à gauche (les autres : à droite)
+  const MAIN_GAUCHE = ["client_01_garcon", "client_03_bouclee", "client_06_moustachu"];   // clients dont la main levée est à gauche (les autres : à droite)
   const RAIL = { x: 690, y: 14, w: 445 };
   const TEMPS_PAT = { normal: 1, lent: 0.5, sans: 0 };
   // Porte battante de la salle (mur du fond, entre le passe-plats et le rail) et position du serveur devant la porte
-  const DOOR = { x: 546, y: 172, w: 146, h: 131 };           // porte de la cuisine : posée sur la plinthe, entre le passe-plats et le rail
-  const DOOR_STAND = { x: 619, y: 345 };
+  const DOOR = { x: 590, y: 176, w: 140, h: 126 };
+  const DOOR_STAND = { x: 652, y: 345 };
   // Cuisine (canvas 1920×1080) : 3 postes sur le sol, chef à gauche, passe-plats à droite, porte de retour à gauche
   const POSTES = [
     { k: 0, nom: "Marmite", tag: "1er groupe", couleur: "g1", x: 520, base: 700, debut: 1 },
@@ -96,35 +93,21 @@
     spawnBase: 14, spawnPas: 1.0, spawnServis: 0.08, spawnMin: 5.5,   // délai entre deux clients (s)
     decoClients: 12,                           // après un changement de déco, les N prochains clients sont charmés (patience rallongée)
     decoPatience: 0.4,                         // patience × (1 + decoPatience × satisfaction de la déco 0..1) pour un client charmé
-    decoClientsCouleur: 4,                     // chantier 8C : un simple changement de couleur (papier, nappes) ne charme que 4 clients (un objet ou une table : decoClients)
-    lassitudeAncien: 0.35,                     // lassitude : un objet d'un resto plus modeste que la salle perd 35 % de son charme par niveau d'écart (clients charmés et valeur dans la satisfaction)
-    lassitudeMin: 0.2,                         // …sans jamais tomber sous 20 % de son charme
-    snobPart: [0, 0.08, 0.15, 0.25],           // part de clients « snobs » à chaque resto (mode difficile seulement) : aucun au village, un sur quatre au Palace
-    snobPatience: 0.85,                        // un snob est plus impatient : patience × 0,85…
-    snobSeuil: 0.6,                            // …il apprécie le décor s'il atteint 60 % d'un bel équipement (objets chers) : patience × (1 + snobCharme × satisfaction), soit ≈ × 1,36 au maximum
-    snobCharme: 0.6,
-    snobDeception: 0.8,                        // …sinon il est déçu : patience × 0,8
     clientsParNiveau: 8,                       // niveau +1 tous les N clients servis
     clientsParTable: 4,                        // une table de plus tous les N clients servis
-    // Chantier 8C : paiement. Du premier coup = plein tarif + prime de rapidité ; une erreur = moitié ; deux erreurs = le client part fâché sans payer.
-    prixExp: 0.7, prixK: [1.23, 1.53, 1.29, 0.96], prixServices: [7, 9, 11, 13],   // échelle des prix (voir prixDeco) ; services d'un élève moyen (≈ 500 / 750 / 950 / 1450 pièces chacun) pour tout équiper
-    paieBase: 10, paieVitesse: 20,             // pièces de base + jusqu'à 20 pièces de prime × patience restante du client (servi vite = jusqu'à 30 ; servi in extremis ≈ 12)
-    paieErreur: [1, 0.5, 0],                   // part payée selon le nombre de plats refusés avant le bon (le 2e refus fait partir le client : voir refusMax)
-    refusMax: 2,                               // au 2e plat refusé, le client part fâché sans payer (la correction s'affiche d'abord)
+    pourboireRefus: [1, 0.5, 0],               // part du pourboire (bonus de rapidité) selon le nombre de plats refusés avant le bon
     etoiles: [0.6, 0.85],                      // part de clients servis du premier coup pour 2 et 3 étoiles
     penalitePat: 0.2,                          // part de patience perdue à chaque erreur de forme
     // Barre de réputation (remplace les cœurs) : 0 = partie perdue, 100 = succès de presse (étoile du guide + article)
     repuDepart: 40, repuApresSucces: 55,
     repuServi: [3, 1, 0],                      // gain selon le nombre de plats refusés avant le bon (+ jusqu'à 2 points selon la patience restante si 0 refus)
     repuRefus: -4,                             // à chaque plat refusé
-    repuFache: -12,                            // client parti fâché (patience épuisée)
-    repuFacheErreur: -6,                       // chantier 8C : client parti après 2 plats refusés (la faute est à la forme, pas à la lenteur : moins sévère)
+    repuFache: -12,                            // client parti fâché
     tablesDepart: 2,                           // tables ouvertes au début de la partie (max 6)
     // Cuisine (chantier 4) — réglages de départ, à ajuster après les essais en classe
     cuisineApres: 10,                          // la cuisine s'ouvre après N clients servis d'affilée (aucun client parti fâché entre-temps)
     cuisineProba: 0.6,                         // part des commandes à cuisiner une fois la cuisine ouverte (les autres restent des QCM en salle)
     cuisinePatMul: 1.5,                        // ces clients patientent plus longtemps (aller-retour par la porte, saisie, cuisson)
-    cuisinePlus: [60, 50, 40, 30],             // chantier 8A : + secondes de patience pour écrire la forme en cuisine (une minute au resto 1, dégressif ensuite)
     cuisson: [3.2, 4.2, 5.2],                  // temps de cuisson (s) : marmite, plan de travail, plaque
     rateDuree: 3,                              // temps pendant lequel un poste reste bloqué après un plat raté
     bonusCuisine: 10,                          // points en plus pour un plat fait maison
@@ -153,13 +136,12 @@
     { id: 0, titre: "Bistrot de village", lieu: "Petit village de campagne", enseigne: ["Au passé", "pas si simple"], groupes: [1], debut: 1, fin: 5, tablesDepart: 2, tablesMax: 4, coef: 1, contenu: "1er groupe", tint: null, facade: "bg_titre", salle: "bg_salle" },
     { id: 1, titre: "Brasserie de la ville", lieu: "La ville", enseigne: ["La Brasserie", "du Passé"], groupes: [1, 2], debut: 6, fin: 6, tablesDepart: 3, tablesMax: 5, coef: 1.5, contenu: "2e groupe + rappel du 1er", tint: "#a9cbb8", facade: "bg_titre_2", salle: "bg_salle_2", murs: MURS_BRASSERIE },
     { id: 2, titre: "Grand restaurant", lieu: "La grande ville", enseigne: ["Le Grand", "Passé Simple"], groupes: [1, 2, 3], debut: 7, fin: 9, tablesDepart: 4, tablesMax: 6, coef: 2, contenu: "3e groupe + rappel", tint: "#c3b0dc", facade: "bg_titre_3", salle: "bg_salle_3", murs: MURS_SALON([[738, 988]]) },
-    { id: 3, titre: "Le Palace", lieu: "La capitale", enseigne: ["LE PALACE", "du Passé Simple"], groupes: [1, 2, 3], debut: 10, fin: 10, tablesDepart: 5, tablesMax: 6, coef: 3, contenu: "Tous les groupes, irréguliers", tint: "#f0d27a", facade: "bg_titre_4", salle: "bg_salle_4", murs: MURS_SALON([[1002, 1244]]) },
+    { id: 3, titre: "Le Palace", lieu: "La capitale", enseigne: ["LE PALACE", "du Passé Simple"], groupes: [1, 2, 3], debut: 10, fin: 10, tablesDepart: 5, tablesMax: 6, coef: 3, contenu: "Tous les groupes, irréguliers", tint: "#f0d27a", facade: "bg_titre_4", salle: "bg_salle_4", murs: MURS_SALON([[560, 815], [1000, 1250]]) },
   ];
   // ------------------------------------------------------------------ l'atelier déco (chantier 7c)
   // Chaque resto a sa propre déco, payée avec les pièces de la campagne (G.camp.argent). Les prix de base ci-dessous sont ceux du bistrot ;
-  // Chantier 8C : les objets et les tables sont étiquetés à leur prix FINAL (chaque resto a son propre catalogue, déjà plus cher en montant : plus de multiplicateur dessus) ;
-  // seuls les papiers peints et les nappes (les mêmes dans les 4 restos : un simple changement de couleur) sont multipliés par PRIX_RESTO, un peu plus vite que les pièces gagnées (coef 1 / 1,5 / 2 / 3).
-  const PRIX_RESTO = [1, 1.6, 2.4, 3.6];
+  // ils sont multipliés par PRIX_RESTO : plus on monte, plus la déco coûte cher (plus vite que les pièces gagnées : coef 1 / 1,5 / 2 / 3).
+  const PRIX_RESTO = [1, 2, 3.5, 6];
   const PAPIERS = [
     { id: "creme", nom: "Rayures crème", prix: 0, tint: null, pastille: "#f3e3b0" },
     { id: "rose", nom: "Rose poudré", prix: 100, tint: "#f2b8b8", pastille: "#f2b8b8" },
@@ -174,121 +156,45 @@
     { id: "or", nom: "Nappes dorées", prix: 220, voile: "rgba(232,179,63,0.48)", pastille: "#e8b33f" },
     { id: "velours", nom: "Nappes velours", prix: 300, voile: "rgba(96,30,64,0.38)", pastille: "#8a3a66" },
   ];
-  // Objets à acheter (chantier 8B). Chaque resto a ses propres objets (2 ou 3 de chaque sorte) : plus l'image est chic, plus elle est proposée dans un resto élevé, et plus elle coûte cher.
-  // « resto » = le resto où l'objet est vendu ; « zone » : mur (accroché), plafond (suspendu), sol (posé contre le mur du fond) ou tapis (au sol, sous les tables) ;
-  // « w » = largeur voulue (réduite si l'objet ne tient pas dans la hauteur du mur) ; « h » = hauteur voulue (objets hauts : plantes, statues, portemanteau) ;
-  // « vues » = les images d'un meuble vu sous plusieurs angles (3/4, profil, et 3/4 en miroir = 3 sens) : le jeu essaie chaque sens, comme chaque emplacement ;
-  // « x » = emplacements préférés (sinon le jeu balaie le mur). Le jeu les place tout seul (placer) : jamais sur le passe-plats, la porte, le rail, les fenêtres, les appliques,
-  // l'affichage, ni sur les tables ; et un objet qui ne trouve aucune place n'est pas vendu (l'atelier le dit).
+  // Objets à acheter : « resto » = premier restaurant où ils sont proposés (plus on monte, plus c'est luxueux et cher) ; « zone » : mur (accroché),
+  // sol (posé contre le mur du fond, derrière les tables), coin (coin gauche). L'image est facultative : un objet sans image n'est pas proposé.
+  // Le jeu les place tout seul (placer) : jamais sur le passe-plats, la porte, le rail, les fenêtres ni devant les tables.
   const OBJETS = [
-    // ---- Bistrot de village (resto 0)
-    { id: "plante", nom: "Plante verte", prix: 100, img: "deco_plante", resto: 0, zone: "coin", w: 130, base: 640, x: [95] },
-    { id: "lampe", nom: "Lampe de bistrot", prix: 140, img: "deco_lampe", resto: 0, zone: "mur", w: 104, y: 34, x: [1195, 1275, 1355] },
-    { id: "horloge", nom: "Horloge", prix: 190, img: "deco_horloge", resto: 0, zone: "mur", w: 110 },
-    { id: "ardoise", nom: "Ardoise du jour", prix: 240, img: "deco_ardoise", resto: 0, zone: "mur", w: 92 },
-    { id: "applique", nom: "Applique murale", prix: 120, img: "deco_applique", resto: 0, zone: "mur", w: 66 },
-    { id: "tab_tulipes", nom: "Tableau de tulipes", prix: 130, img: "deco_tableau_tulipes", resto: 0, zone: "mur", w: 100 },
-    { id: "tab_briques", nom: "Tableau « briques »", prix: 150, img: "deco_tableau_briques", resto: 0, zone: "mur", w: 190 },
-    { id: "tab_lune", nom: "Tableau de la lune", prix: 180, img: "deco_tableau_lune", resto: 0, zone: "mur", w: 160 },
-    { id: "plante_sansevieria", nom: "Sansevieria", prix: 160, img: "deco_plante_sansevieria", resto: 0, zone: "sol", h: 190 },
-    { id: "portemanteau", nom: "Portemanteau", prix: 140, img: "deco_portemanteau", resto: 0, zone: "sol", h: 230 },
-    { id: "desserte", nom: "Desserte en bois", prix: 210, img: "deco_desserte", resto: 0, zone: "sol", w: 230, base: 482, x: [830, 1060, 1290, 1520, 1740] },
-    { id: "tapis_rayures_creme", nom: "Tapis à rayures", prix: 110, img: "deco_tapis_rayures_creme", resto: 0, zone: "tapis", w: 330 },
-    { id: "tapis_rayures_fines", nom: "Tapis rayures fines", prix: 140, img: "deco_tapis_rayures_fines", resto: 0, zone: "tapis", w: 360 },
-    { id: "tapis_zigzag", nom: "Tapis en zigzag", prix: 180, img: "deco_tapis_zigzag", resto: 0, zone: "tapis", w: 400 },
-    // ---- Brasserie de la ville (resto 1)
-    { id: "tab_tournesols", nom: "Les tournesols", prix: 110, img: "deco_tableau_tournesols", resto: 1, zone: "mur", w: 140 },
-    { id: "tab_pomme", nom: "Tableau de la pomme", prix: 120, img: "deco_tableau_pomme", resto: 1, zone: "mur", w: 180 },
-    { id: "tab_abstrait_rouge", nom: "Abstrait rouge", prix: 140, img: "deco_tableau_abstrait_rouge", resto: 1, zone: "mur", w: 210 },
-    { id: "lustre_abat_jour", nom: "Lustre à abat-jours", prix: 190, img: "deco_lustre_abat_jour", resto: 1, zone: "plafond", w: 270 },
-    { id: "lustre_spheres", nom: "Lustre sphères", prix: 230, img: "deco_lustre_spheres", resto: 1, zone: "plafond", w: 150 },
-    { id: "rideaux", nom: "Rideaux à embrasses", prix: 130, img: "deco_rideaux", resto: 1, zone: "fenetre", w: 150 },
-    { id: "plante_dracaena", nom: "Dracaena", prix: 100, img: "deco_plante_dracaena", resto: 1, zone: "sol", h: 210 },
-    { id: "plante_ficus", nom: "Grand ficus", prix: 140, img: "deco_plante_ficus", resto: 1, zone: "sol", h: 250 },
-    { id: "vitrine", nom: "Vitrine à tartes", prix: 180, img: "deco_vitrine", resto: 1, zone: "sol", w: 170 },
-    { id: "comptoir_gateaux", nom: "Présentoir à gâteaux", prix: 170, img: "deco_comptoir_gateaux", resto: 1, zone: "sol", h: 190 },
-    { id: "desserte_simple", nom: "Desserte à roulettes", prix: 210, vues: ["deco_desserte_simple_3q", "deco_desserte_simple_profil"], resto: 1, zone: "sol", w: 190 },
-    { id: "statue_professeur", nom: "Buste du professeur", prix: 230, img: "deco_statue_professeur", resto: 1, zone: "sol", h: 250 },
-    { id: "statue_dame", nom: "Buste de la dame", prix: 260, img: "deco_statue_dame", resto: 1, zone: "sol", h: 250 },
-    { id: "tapis_tresse", nom: "Tapis rond tressé", prix: 140, img: "deco_tapis_tresse", resto: 1, zone: "tapis", w: 480 },
-    { id: "tapis_losanges", nom: "Tapis à losanges", prix: 160, img: "deco_tapis_losanges", resto: 1, zone: "tapis", w: 560 },
-    { id: "tapis_bordure", nom: "Tapis à bordure", prix: 190, img: "deco_tapis_bordure", resto: 1, zone: "tapis", w: 600 },
-    // ---- Grand restaurant (resto 2)
-    { id: "tab_spirales", nom: "Spirales", prix: 130, img: "deco_tableau_spirales", resto: 2, zone: "mur", w: 220 },
-    { id: "tab_kandinsky", nom: "Composition (Kandinsky)", prix: 160, img: "deco_tableau_kandinsky", resto: 2, zone: "mur", w: 230 },
-    { id: "miroir_rectangle", nom: "Miroir doré", prix: 180, img: "deco_miroir_rectangle", resto: 2, zone: "mur", w: 330 },
-    { id: "tete_cerf", nom: "Trophée de cerf", prix: 170, img: "deco_tete_cerf", resto: 2, zone: "mur", w: 170 },
-    { id: "lustre_globes", nom: "Lustre à globes", prix: 230, img: "deco_lustre_globes", resto: 2, zone: "plafond", w: 190 },
-    { id: "lustre_losanges", nom: "Lustre en losanges", prix: 270, img: "deco_lustre_losanges", resto: 2, zone: "plafond", w: 150 },
-    { id: "lustre_poutres", nom: "Lustre en poutres", prix: 300, img: "deco_lustre_poutres", resto: 2, zone: "plafond", w: 320 },
-    { id: "plante_monstera", nom: "Monstera", prix: 140, img: "deco_plante_monstera", resto: 2, zone: "sol", h: 260 },
-    { id: "statue_sage", nom: "Buste du sage", prix: 300, img: "deco_statue_sage", resto: 2, zone: "sol", h: 270 },
-    { id: "statue_noble", nom: "Buste du noble", prix: 330, img: "deco_statue_noble", resto: 2, zone: "sol", h: 270 },
-    { id: "statue_dame_perles", nom: "Buste aux perles", prix: 350, img: "deco_statue_dame_perles", resto: 2, zone: "sol", h: 270 },
-    { id: "desserte_bois", nom: "Desserte en acajou", prix: 310, vues: ["deco_desserte_bois_3q", "deco_desserte_bois_profil"], resto: 2, zone: "sol", w: 200 },
-    { id: "piano_3q", nom: "Piano à queue", prix: 490, vues: ["deco_piano_3q", "deco_piano_face"], resto: 2, zone: "sol", w: 300 },
-    { id: "tapis_ornement", nom: "Tapis ornemental", prix: 190, img: "deco_tapis_ornement", resto: 2, zone: "tapis", w: 720 },
-    { id: "tapis_rouge_cercles", nom: "Grand tapis rond", prix: 240, img: "deco_tapis_rouge_cercles", resto: 2, zone: "tapis", w: 760 },
-    // ---- Le Palace (resto 3)
-    { id: "tab_eclaboussures", nom: "Éclaboussures", prix: 230, img: "deco_tableau_eclaboussures", resto: 3, zone: "mur", w: 250 },
-    { id: "tab_abstrait_orne", nom: "Grand tableau orné", prix: 310, img: "deco_tableau_abstrait_orne", resto: 3, zone: "mur", w: 270 },
-    { id: "miroir_ovale", nom: "Miroir ovale doré", prix: 350, img: "deco_miroir_ovale", resto: 3, zone: "mur", w: 170 },
-    { id: "lustre_perles", nom: "Lustre à perles", prix: 380, img: "deco_lustre_perles", resto: 3, zone: "plafond", w: 400 },
-    { id: "lustre_bougies", nom: "Lustre à bougies", prix: 500, img: "deco_lustre_bougies", resto: 3, zone: "plafond", w: 280 },
-    { id: "lustre_verriere", nom: "Lustre en cristal", prix: 620, img: "deco_lustre_verriere", resto: 3, zone: "plafond", w: 340 },
-    { id: "plante_palmier", nom: "Palmier d’intérieur", prix: 200, img: "deco_plante_palmier", resto: 3, zone: "sol", h: 290 },
-    { id: "statue_zeus", nom: "Buste de Zeus", prix: 420, img: "deco_statue_zeus", resto: 3, zone: "sol", h: 290 },
-    { id: "statue_meduse", nom: "Buste de Méduse", prix: 500, img: "deco_statue_meduse", resto: 3, zone: "sol", h: 290 },
-    { id: "statue_monument", nom: "Monument de marbre", prix: 850, img: "deco_statue_monument", resto: 3, zone: "sol", h: 310 },
-    { id: "desserte_or", nom: "Desserte dorée", prix: 580, vues: ["deco_desserte_or_3q", "deco_desserte_or_profil"], resto: 3, zone: "sol", w: 220 },
-    { id: "piano_face", nom: "Piano de concert", prix: 770, vues: ["deco_piano_face", "deco_piano_3q"], resto: 3, zone: "sol", w: 340 },
-    { id: "tapis_persan", nom: "Tapis persan", prix: 350, img: "deco_tapis_persan", resto: 3, zone: "tapis", w: 950 },
-    { id: "tapis_baroque", nom: "Tapis baroque", prix: 460, img: "deco_tapis_baroque", resto: 3, zone: "tapis", w: 1100 },
+    { id: "plante", nom: "Plante verte", prix: 120, img: "deco_plante", resto: 0, zone: "coin", w: 130, base: 640, x: [95] },
+    { id: "lampe", nom: "Lampe de bistrot", prix: 180, img: "deco_lampe", resto: 0, zone: "mur", w: 104, y: 34, x: [1195, 1275, 1355] },
+    { id: "horloge", nom: "Horloge", prix: 240, img: "deco_horloge", resto: 0, zone: "mur", w: 110, y: 92, x: [1810, 1730] },
+    { id: "ardoise", nom: "Ardoise du jour", prix: 300, img: "deco_ardoise", resto: 0, zone: "mur", w: 92, y: 196, x: [790, 870] },
+    { id: "applique", nom: "Applique murale", prix: 150, img: "deco_applique", resto: 0, zone: "mur", w: 66, y: 190, x: [1010, 940, 1080] },
+    { id: "cadre_fleurs", nom: "Tableau de fleurs", prix: 200, img: "deco_cadre_fleurs", resto: 0, zone: "mur", w: 190, y: 175, x: [1050, 1250, 1450] },
+    { id: "desserte", nom: "Desserte en bois", prix: 260, img: "deco_desserte", resto: 0, zone: "sol", w: 230, base: 482, x: [830, 1060, 1290, 1520, 1740] },
+    { id: "portemanteau", nom: "Portemanteau", prix: 180, img: "deco_portemanteau", resto: 0, zone: "sol", w: 90, base: 482, x: [700, 1190, 1700, 1800] },
+    { id: "plante_haute", nom: "Grand ficus", prix: 220, img: "deco_plante_haute", resto: 1, zone: "sol", w: 120, base: 482, x: [1150, 780, 1650, 1830] },
+    { id: "miroir", nom: "Grand miroir", prix: 350, img: "deco_miroir", resto: 1, zone: "mur", w: 150, y: 160, x: [1400, 1580, 1230] },
+    { id: "rideaux", nom: "Rideaux à embrasses", prix: 280, img: "deco_rideaux", resto: 1, zone: "mur", w: 150, y: 150, x: [1660, 1500, 1330], exclu: [3] },
+    { id: "vitrine", nom: "Vitrine à tartes", prix: 400, img: "deco_vitrine", resto: 1, zone: "sol", w: 170, base: 482, x: [1380, 900, 1620] },
+    { id: "comptoir_gateaux", nom: "Présentoir à gâteaux", prix: 380, img: "deco_comptoir_gateaux", resto: 1, zone: "sol", w: 120, base: 482, x: [1010, 1470, 1780] },
+    { id: "tete_cerf", nom: "Trophée de cerf", prix: 420, img: "deco_tete_cerf", resto: 2, zone: "mur", w: 150, y: 170, x: [1500, 1300, 1700] },
+    { id: "lustre", nom: "Lustre à pampilles", prix: 600, img: "deco_lustre", resto: 2, zone: "mur", w: 250, y: 0, x: [1450, 1650, 1350] },
+    { id: "statue", nom: "Buste en marbre", prix: 700, img: "deco_statue", resto: 2, zone: "sol", w: 110, base: 482, x: [1590, 760, 1250] },
+    { id: "piano", nom: "Piano à queue", prix: 1200, img: "deco_piano", resto: 3, zone: "sol", w: 420, base: 482, x: [1330, 1100] },
   ];
-  OBJETS.forEach((o) => { if (!o.img && o.vues) o.img = o.vues[0]; });
-  const imgsObjets = () => { const l = []; OBJETS.forEach((o) => (o.vues || [o.img]).forEach((n) => { if (!l.includes(n)) l.push(n); })); return l; };
-  // Tables et chaises par resto (chantier 8B) : la table de base est gratuite ; les variantes (liseré, frange, broderies, bougies…) s'achètent. Au bistrot : les six nappes à carreaux d'origine.
-  // plateau = point où se pose l'assiette (px de l'image) ; larg = largeur d'affichage de la nappe.
-  const TABLES = [
-    { id: "carreaux", nom: "Nappes à carreaux", resto: 0, prix: 0, img: null },
-    { id: "bois_nue", nom: "Plateau de bois, liseré vert", resto: 1, prix: 0, img: "table_bois_nue", y1: 150, larg: 205 },
-    { id: "bois_carafe", nom: "Plateau de bois, carafe", resto: 1, prix: 80, img: "table_bois_carafe", y1: 225, larg: 205, haut: 28 },
-    { id: "drape_lisere", nom: "Nappe drapée, liseré vert", resto: 1, prix: 120, img: "table_drape_lisere", y1: 130, larg: 215 },
-    { id: "drape_uni", nom: "Nappe drapée crème", resto: 2, prix: 0, img: "table_drape_uni", y1: 130, larg: 215 },
-    { id: "frange", nom: "Nappe à franges dorées", resto: 2, prix: 110, img: "table_frange", y1: 215, larg: 205 },
-    { id: "croix", nom: "Chemins de table croisés", resto: 2, prix: 160, img: "table_croix", y1: 240, larg: 205 },
-    { id: "croix_roses", nom: "Chemins croisés et roses", resto: 3, prix: 0, img: "table_croix_roses", y1: 300, larg: 205, haut: 55 },
-    { id: "frange_bougies", nom: "Franges, bougies et serviettes", resto: 3, prix: 200, img: "table_frange_bougies", y1: 400, larg: 205, haut: 80 },
-  ];
-  const tablesResto = (i) => TABLES.filter((t) => t.resto === i);
-  TABLES.forEach((t) => { if (t.img) LISTE[t.img] = "assets/salle/" + t.img + ".png"; });
-  imgsObjets().forEach((n) => { if (!LISTE[n]) LISTE[n] = "assets/salle/" + n + ".png"; });
-  const CHAISES = ["chaise", "chaise_brasserie", "chaise_gala", "chaise_palace"];      // une par resto : seul le dossier est visible derrière le client
-  const CHAISE_DIM = [{ w: 125, bas: 723 }, { w: 190, bas: 646 }, { w: 220, bas: 650 }, { w: 175, bas: 652 }];
+  const objetsResto = (i) => OBJETS.filter((o) => o.resto <= i && !(o.exclu || []).includes(i) && img(o.img));         // proposés dans ce resto (et dont l'image existe)
   const CATALOGUE = [
-    { cle: "papier", titre: "Papiers", liste: PAPIERS },
+    { cle: "papier", titre: "Papier peint", liste: PAPIERS },
     { cle: "nappes", titre: "Nappes", liste: NAPPES },
-    { cle: "table", titre: "Tables", liste: TABLES },
     { cle: "objet", titre: "Objets", liste: OBJETS },
   ];
-  // liste de l'atelier : les objets et tables du resto choisi (2 ou 3 de chaque sorte), pas ceux des autres restos
-  const listeAtelier = (cle, i) => (cle === "objet" ? OBJETS.filter((o) => o.resto === i && o.img && imgOk(o)) : cle === "table" ? tablesResto(i) : CATALOGUE.find((c) => c.cle === cle).liste);
-  const imgOk = (o) => (o.vues || [o.img]).every((n) => img(n));
-  // Chantier 8C : échelle de prix. Objets et tables : prix de catalogue (« valeur ») remis à l'échelle de la caisse du resto, avec un écart qui se creuse :
-  // les petites pièces restent à portée dès le premier service (≈ 1/5 d'un service), les grandes pièces demandent plusieurs services. Équiper à fond un resto
-  // = BAL.prixServices services d'un élève moyen. Couleurs (papier, nappes) : × PRIX_RESTO.
-  const prixDeco = (base, i, cle) => (cle === "objet" || cle === "table" ? Math.round(BAL.prixK[i] * Math.pow(base, 1 + BAL.prixExp) / Math.pow(100, BAL.prixExp) / 10) * 10 : Math.round(base * PRIX_RESTO[i] / 10) * 10);
-  const decoVide = () => ({ papier: "creme", nappes: "origine", table: "", achats: [], charme: 0 });          // table "" = la table de base du resto ; charme = clients encore charmés par un changement récent
-  const parDefaut = (cle, id) => (cle === "papier" && id === "creme") || (cle === "nappes" && id === "origine") || (cle === "table" && TABLES.some((t) => t.id === id && t.prix === 0));
+  const prixDeco = (base, i) => Math.round(base * PRIX_RESTO[i] / 10) * 10;
+  const decoVide = () => ({ papier: "creme", nappes: "origine", achats: [], charme: 0 });
+  const parDefaut = (cle, id) => (cle === "papier" && id === "creme") || (cle === "nappes" && id === "origine");
   const possede = (d, cle, id) => parDefaut(cle, id) || d.achats.includes(cle + ":" + id);
-  const choisi = (d, cle, id) => (cle === "objet" ? d.achats.includes("objet:" + id) : cle === "table" ? d.table === id || (!d.table && TABLES.some((t) => t.id === id && t.prix === 0)) : d[cle] === id);
+  const choisi = (d, cle, id) => (cle === "objet" ? d.achats.includes("objet:" + id) : d[cle] === id);
   function decoLire(o) {                                         // lecture prudente de la déco sauvegardée
     const d = decoVide();
     if (!o || typeof o !== "object") return d;
     if (Array.isArray(o.achats)) d.achats = o.achats.filter((a, k) => typeof a === "string" && o.achats.indexOf(a) === k && CATALOGUE.some((C) => C.cle !== "objet" ? C.liste.some((it) => C.cle + ":" + it.id === a && it.prix > 0) : C.liste.some((it) => C.cle + ":" + it.id === a)));
     if (typeof o.papier === "string" && PAPIERS.some((p) => p.id === o.papier) && possede(d, "papier", o.papier)) d.papier = o.papier;
     if (typeof o.nappes === "string" && NAPPES.some((p) => p.id === o.nappes) && possede(d, "nappes", o.nappes)) d.nappes = o.nappes;
-    if (typeof o.table === "string" && TABLES.some((p) => p.id === o.table) && possede(d, "table", o.table)) d.table = o.table;
     if (Number.isFinite(o.charme)) d.charme = Math.max(0, Math.min(99, Math.floor(o.charme)));
     return d;
   }
@@ -304,7 +210,7 @@
   // ------------------------------------------------------------------ état
   let rndSeed = (Date.now() % 2147483646) + 1;
   const rnd = () => (rndSeed = (rndSeed * 16807) % 2147483647) / 2147483647;
-  const G = { keys: { gauche: false, droite: false }, mode: "accueil", tA: 0, sortie: 0, t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, difficile: 0, toast: null, vue: "salle", trans: null, paused: false, muted: false, nom: "Chez Passé Simple", guide: [], camp: campVide(), resto: 0, accueilResto: 0, accueilSuite: "carte", libre: false, carteSel: 0, carteMsg: null, resetT: 0, retourDe: "title", lecture: null, saisieNom: "", mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
+  const G = { keys: { gauche: false, droite: false }, mode: "accueil", tA: 0, sortie: 0, t: 0, chrono: "normal", duree: 0, groupe: 0, cuisine: 1, vue: "salle", trans: null, paused: false, muted: false, nom: "Chez Passé Simple", guide: [], camp: campVide(), resto: 0, accueilResto: 0, accueilSuite: "carte", libre: false, carteSel: 0, carteMsg: null, resetT: 0, retourDe: "title", lecture: null, saisieNom: "", mouse: { x: 0, y: 0 } };   // groupe : 0 = tous, 1, 2 ou 3
   let S_ = null;     // état de partie
 
   // ------------------------------------------------------------------ accessibilité : réglages mémorisés dans le navigateur
@@ -320,17 +226,13 @@
     if (sv && [0, 3, 5, 10].includes(sv.duree)) G.duree = sv.duree;
     if (sv && [0, 1, 2, 3].includes(sv.groupe)) G.groupe = sv.groupe;
     if (sv && [0, 1].includes(sv.cuisine)) G.cuisine = sv.cuisine;
-    if (sv && [0, 1].includes(sv.difficile)) G.difficile = sv.difficile; else if (sv && sv.cuisine === 1) G.difficile = 1;      // ancienne sauvegarde : « cuisine : oui » devient le mode difficile
     if (sv && typeof sv.nom === "string" && sv.nom.trim()) G.nom = sv.nom.slice(0, 24);
     if (sv && sv.camp) G.camp = campLire(sv.camp);
     if (sv && Number.isInteger(sv.resto) && sv.resto >= 0 && sv.resto < RESTOS.length && G.camp.restos[sv.resto].ouvert) G.resto = sv.resto;
     G.carteSel = G.resto;
     if (sv && Array.isArray(sv.guide)) G.guide = sv.guide.filter((a) => a && Number.isInteger(a.id) && Array.isArray(a.v)).slice(0, 4);
   } catch (e) { /* pas de stockage : les réglages ne seront pas mémorisés */ }
-  // Chantier 8A : le mode difficile réunit la cuisine, les objets débloqués et les changements de couleur de la déco. Le mode facile = la salle seule, déco de base.
-  const modeDur = () => G.difficile === 1;
-  const cuisineOk = () => modeDur() && !!G.cuisine;
-  function sauver() { try { localStorage.setItem(CLE, JSON.stringify({ A, chrono: G.chrono, duree: G.duree, groupe: G.groupe, cuisine: G.cuisine, difficile: G.difficile, nom: G.nom, guide: G.guide, camp: G.camp, resto: G.resto })); } catch (e) { /* ignoré */ } }
+  function sauver() { try { localStorage.setItem(CLE, JSON.stringify({ A, chrono: G.chrono, duree: G.duree, groupe: G.groupe, cuisine: G.cuisine, nom: G.nom, guide: G.guide, camp: G.camp, resto: G.resto })); } catch (e) { /* ignoré */ } }
   const ts = (n) => Math.round(n * TAILLES[A.taille]);                 // taille de texte réglable
   const FOND = () => (A.contraste ? "#ffffff" : "#f6e9cf");
   const ENCRE = () => (A.contraste ? "#000000" : "#4a2f22");
@@ -485,88 +387,24 @@
   function fx(o) { o.t = 0; S_.fx.push(o); }
 
   // ------------------------------------------------------------------ clients
-  // Casting (chantier 8B) : chaque resto a ses habitués. Les nouveaux clients (lots A à D, recolorables) arrivent peu à peu ; les anciens deviennent rares.
-  const CASTING = [{ vieux: 1, A: 1.3 }, { vieux: 0.45, A: 1, B: 1.2 }, { vieux: 0.3, A: 0.4, B: 1, C: 1.2 }, { vieux: 0.2, B: 0.3, C: 1, D: 1.5 }];
-  function tirerClient(pris) {
-    const id = S_ && S_.ctx && S_.ctx.id >= 0 ? S_.ctx.id : 0, C = CASTING[Math.min(3, id)], pool = [];
-    CLIENTS.slice(0, 6).forEach((c) => pool.push([c, C.vieux]));
-    Object.keys(NOUVEAUX).forEach((c) => { if (C[NOUVEAUX[c]] && img(c + "_attente")) pool.push([c, C[NOUVEAUX[c]]]); });
-    const libres = pool.filter((q) => !pris.includes(q[0])), tot = libres.reduce((a, q) => a + q[1], 0);
-    let r = rnd() * tot; for (const q of libres) { r -= q[1]; if (r <= 0) return q[0]; }
-    return libres.length ? libres[0][0] : CLIENTS[0];
-  }
-  // Recoloration des nouveaux clients : la planche <slug>_calques.png a 4 rangées (repères, peau, cheveux, vêtement) × 2 colonnes (attente, appel), de la taille du client
-  const TEINTES = {
-    skin: ["#f1c9a5", "#e8b48a", "#d09a6c", "#b9805a", "#9a6743", "#7b4a2e"],
-    hair: ["#2a1d17", "#5a3a29", "#8a5a2b", "#b8893a", "#a24a2b", "#8e8e8e"],
-    // 8C : pas de gris clair ni de blond pâle — la recoloration éclaircit aussi les contours et les yeux (voir CHANTIER8C.md)
-    shirt: ["#d9473b", "#2f6a8f", "#4c8c4a", "#e8b33f", "#7b4b94", "#c76b8f", "#2f2f3a", "#f0e6d2", "#e8833a"],
-  };
-  const TEINTE_REF = { skin: 0.7, hair: 0.3, shirt: 0.4 };               // luminosité des aplats d'origine de chaque calque (mesurée sur les 11 clients, chantier 8C)
-  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
-  const recolCache = {};
-  function recolorer(slug, pose, rc) {
-    const base = img(slug + "_" + pose), cal = img(slug + "_calques");
-    if (!rc || !base || !cal || cal.height < base.height * 4) return base;
-    const cle = [slug, pose, rc.skin, rc.hair, rc.shirt].join("|");
-    if (recolCache[cle]) return recolCache[cle];
-    if (Object.keys(recolCache).length > 80) Object.keys(recolCache).forEach((k) => delete recolCache[k]);
-    const W_ = base.width, H_ = base.height, col = pose === "appel" ? 1 : 0, out = document.createElement("canvas"); out.width = W_; out.height = H_;
-    const o = out.getContext("2d"); o.drawImage(base, 0, 0);
-    [["skin", 1], ["hair", 2], ["shirt", 3]].forEach(([k, row]) => {
-      if (!rc[k]) return;
-      const t = document.createElement("canvas"); t.width = W_; t.height = H_; const x = t.getContext("2d");
-      // Chantier 8C : nouvelle recoloration. Avant (color + multiply / screen), une cible plus CLAIRE que l'original donnait du gris délavé (le screen blanchit et désature).
-      // Maintenant : la zone est passée en gris (luminosité conservée, donc les contours et les ombres), éclaircie pour que son aplat (TEINTE_REF) devienne blanc,
-      // puis multipliée par la couleur voulue : l'aplat prend exactement cette couleur, qu'elle soit plus claire ou plus foncée, et les ombres restent des ombres de cette couleur.
-      x.clearRect(0, 0, W_, H_); x.drawImage(base, 0, 0);
-      x.globalCompositeOperation = "saturation"; x.fillStyle = "#808080"; x.fillRect(0, 0, W_, H_);
-      const gris = document.createElement("canvas"); gris.width = W_; gris.height = H_; const gx = gris.getContext("2d"); gx.drawImage(t, 0, 0);
-      const f = 1 / TEINTE_REF[k]; x.globalCompositeOperation = "lighter";
-      for (let n = 1; n < Math.floor(f); n++) x.drawImage(gris, 0, 0);
-      x.globalAlpha = f - Math.floor(f) || 0; if (x.globalAlpha) x.drawImage(gris, 0, 0); x.globalAlpha = 1;
-      x.globalCompositeOperation = "multiply"; x.fillStyle = rc[k]; x.fillRect(0, 0, W_, H_);
-      x.globalCompositeOperation = "destination-in"; x.drawImage(cal, col * W_, row * H_, W_, H_, 0, 0, W_, H_); x.drawImage(base, 0, 0);
-      o.drawImage(t, 0, 0);
-    });
-    return (recolCache[cle] = out);
-  }
-  // satisfaction de la déco d'un resto (0 à 1) : valeur des objets et des tables achetés, comparée à un bel équipement de ce resto
-  const DECO_REF = [1000, 1500, 2000, 3200];                   // valeur d'un « bel équipement » (prix affichés, chantier 8C) : environ 55 % de l'équipement complet de chaque resto
-  const lassitude = (o, i) => Math.max(BAL.lassitudeMin, 1 - BAL.lassitudeAncien * Math.max(0, i - (o.resto === undefined ? i : o.resto)));          // 1 = pas lassé ; objets des restos précédents : moins de charme
-  function satisfactionDeco(i) {
-    const d = G.camp.restos[i].deco; let v = 0;
-    d.achats.forEach((a) => { const [cle, id] = a.split(":"), it = (CATALOGUE.find((c) => c.cle === cle) || { liste: [] }).liste.find((x) => x.id === id); if (it && (cle === "objet" || cle === "table")) v += it.prix * (cle === "objet" ? lassitude(it, i) : 1); });
-    if (d.papier !== "creme") v += 80; if (d.nappes !== "origine") v += 120;
-    return Math.max(0.15, Math.min(1, v / DECO_REF[i]));
-  }
   function nouveauClient(table) {
     let vip = rnd() < 0.07;
     const pris = S_.tables.map((t) => t.client && t.client.slug).filter(Boolean);       // deux tables ne montrent jamais le même personnage
-    const slug = vip && !pris.includes(CLIENTS[6]) ? CLIENTS[6] : tirerClient(pris);
+    const libres = CLIENTS.slice(0, 6).filter((c) => !pris.includes(c));
+    const slug = vip && !pris.includes(CLIENTS[6]) ? CLIENTS[6] : libres[Math.floor(rnd() * libres.length)] || CLIENTS[Math.floor(rnd() * 6)];
     vip = slug === CLIENTS[6];
-    const looks = { skin: ["#f1c9a5", "#d9a47a", "#a9714c", "#f6d5b5"], shirt: ["#e8b33f", "#4c8c4a", "#d9473b", "#e8833a", "#7b4b94", "#c76b8f"], hair: ["#5a3a29", "#2e2420", "#b8893a", "#9a9a9a", "#a24a2b"] };
+    const looks = { skin: ["#f1c9a5", "#d9a47a", "#a9714c", "#f6d5b5"], shirt: ["#e8b33f", "#4c8c4a", "#d9473b", "#e8833a", "#7b4b94", "#c76b8f"], hair: ["#5a3a29", "#2e2420", "#c9a24a", "#9a9a9a", "#a24a2b"] };
     const pick = (a) => a[Math.floor(rnd() * a.length)];
-    let patSec = Math.max(BAL.patMin, BAL.patBase - BAL.patPas * rythme()) * (vip ? 0.8 : 1), charme = false;
-    const rid = S_.ctx.id;
-    if (modeDur() && rid >= 0 && G.camp.restos[rid].deco.charme > 0) {          // chantier 8B : un changement récent de déco charme les N clients suivants (patience rallongée)
-      const dc = G.camp.restos[rid].deco; dc.charme--; charme = true; patSec *= 1 + BAL.decoPatience * satisfactionDeco(rid); sauver();
-    }
-    let snob = false, snobOk = false;                                         // chantier 8C : client snob (mode difficile) : impatient, mais il adore un décor chic et méprise un décor modeste
-    if (modeDur() && rid >= 0 && !vip && rnd() < BAL.snobPart[rid]) {
-      const sat = satisfactionDeco(rid); snob = true; snobOk = sat >= BAL.snobSeuil;
-      patSec *= BAL.snobPatience * (snobOk ? 1 + BAL.snobCharme * sat : BAL.snobDeception);
-    }
+    const patSec = Math.max(BAL.patMin, BAL.patBase - BAL.patPas * rythme()) * (vip ? 0.8 : 1);
     table.client = { slug, vip, state: "enter", t: 0, patience: 1, patSec, cmd: null, ticket: null, tries: 0, refus: [], corrige: false,
-      look: { skin: pick(looks.skin), shirt: vip ? "#333" : pick(looks.shirt), hair: vip ? "#222" : pick(looks.hair) }, bob: rnd() * 6, charme, snob, snobOk,
-      recol: NOUVEAUX[slug] && rnd() < 0.65 ? { skin: pick(TEINTES.skin), hair: pick(TEINTES.hair), shirt: pick(TEINTES.shirt) } : null };      // 1 fois sur 3 : l'apparence d'origine
+      look: { skin: pick(looks.skin), shirt: vip ? "#333" : pick(looks.shirt), hair: vip ? "#222" : pick(looks.hair) }, bob: rnd() * 6 };
   }
   const clientAttend = (c) => c.state === "call" || c.state === "order" || c.state === "wait";
   function smileyIdx(p) { return p > 0.85 ? 0 : p > 0.65 ? 1 : p > 0.45 ? 2 : p > 0.28 ? 3 : p > 0.12 ? 4 : 5; }
 
   function libererTable(table) { table.client = null; table.plat = null; table.platT = 0; table.refusT = 0; table.bulle = null; }
 
-  function clientPart(table, colere, repuDelta) {
+  function clientPart(table, colere) {
     const c = table.client; if (!c) return;
     if (c.ticket) S_.tickets = S_.tickets.filter((t) => t.id !== c.ticket);
     if (S_.panel && S_.panel.table === table.i) S_.panel = null;
@@ -577,7 +415,7 @@
     if (colere) {
       S_.combo = 0; S_.partis++; S_.serie = 0;
       c.state = "leave"; c.t = 0; c.angry = true; sonKo();
-      changerRepu(repuDelta === undefined ? BAL.repuFache : repuDelta, table.x, 470);
+      changerRepu(BAL.repuFache, table.x, 470);
       msg(S_.seance ? "Un client est parti sans être servi." : "Un client est parti fâché !", "La réputation du resto baisse.", "bad", 2.4);
     } else { c.state = "leave"; c.t = 0; }
   }
@@ -638,7 +476,7 @@
     if (!c) return;
     c.state = "wait";
     if (c.cuisine) {                         // plat à fabriquer en cuisine : pas d'assiette à choisir, le client attend
-      c.etape = "cuisine"; c.patSec = c.patSec * BAL.cuisinePatMul + BAL.cuisinePlus[Math.max(0, S_.ctx.id)];
+      c.etape = "cuisine"; c.patSec *= BAL.cuisinePatMul;
       msg("Commande à cuisiner !", "Passe la porte battante (touche C) : " + cmdTexte(c.cmd) + ", au passé simple.", "info", 3.6);
       if (A.voix) direCommande(c.cmd, false);
       return;
@@ -745,11 +583,6 @@
       const pc = PERS_COURT[c.cmd.p];                                   // le client refuse, puis répète sa demande
       tb.bulle = { lignes: (autre ? ["Ce n’est pas le plat", "que j’ai demandé !"] : ["Ce n’est pas", "la bonne cuisson !"]).concat(["Je voulais « " + c.cmd.verbe + " »,", pc[0] + " " + pc[1]]), t: 0, dur: 4.6 };
       sv.pose = "oups"; sv.poseT = 0.9;
-      if (c.refus.length >= BAL.refusMax) {                             // 2e erreur : le client part sans payer ; on montre quand même la bonne forme et la règle
-        if (A.voix) dire(tb.bulle.lignes.join(" "));
-        clientPart(tb, true, BAL.repuFacheErreur); messageErreur(c.cmd); c.corrige = true;
-        return;
-      }
       changerRepu(BAL.repuRefus, tb.x, 470);
       if (A.voix) dire(tb.bulle.lignes.join(" "));
       if (carry.cuisine) {                                              // plat écrit à la main : il faut le refaire en cuisine
@@ -759,11 +592,11 @@
       } else { c.etape = "choix"; msg("Plat refusé !", "Retourne au passe-plats : il reste d’autres assiettes.", "bad", 3); }
       return;
     }
-    const nr = c.refus.length, part = BAL.paieErreur[Math.min(nr, BAL.paieErreur.length - 1)];
-    const bonus = carry.sansBonus ? 0 : Math.round(BAL.paieVitesse * c.patience);
+    const nr = c.refus.length, coef = BAL.pourboireRefus[Math.min(nr, BAL.pourboireRefus.length - 1)];
+    const bonus = carry.sansBonus ? 0 : Math.round(10 * c.patience * coef);
     if (!nr) S_.parfaits++;
     if (c.cmd) S_.vus.push({ verbe: c.cmd.verbe, texte: pv(c.cmd.pronom.charAt(0).toLowerCase() + c.cmd.pronom.slice(1), c.cmd.bonne) });
-    const gain = Math.round(((BAL.paieBase + bonus) * (c.vip ? 2 : 1) + (S_.combo >= 2 ? 5 : 0) + (carry.cuisine ? BAL.bonusCuisine : 0)) * part * S_.ctx.coef);   // pièces × part payée (erreur) × coefficient du resto
+    const gain = Math.round(((10 + bonus) * (c.vip ? 2 : 1) + (S_.combo >= 2 ? 5 : 0) + (carry.cuisine ? BAL.bonusCuisine : 0)) * S_.ctx.coef);   // pièces × coefficient du resto
     if (!S_.ctx.libre) { const r = G.camp.restos[S_.ctx.id]; r.argent += gain; G.camp.argent += gain; r.meilleur = Math.max(r.meilleur, S_.score + gain); }
     S_.score += gain; S_.combo++; S_.servis++; S_.serie++;
     sv.carry = null;
@@ -785,7 +618,7 @@
       msg("Niveau " + S_.niveau + " !", n ? "Nouveaux verbes : " + n.titre + " (" + n.detail + ")" : "Les clients sont plus pressés !", "ok", 3.4);
     }
     else if (S_.servis % BAL.clientsParTable === 0 && S_.ctx.tablesDepart + S_.servis / BAL.clientsParTable <= S_.ctx.tablesMax) msg("Une nouvelle table est ouverte !", "", "ok", 2.2);
-    if (cuisineOk() && !S_.cuis.ouverte && S_.serie >= BAL.cuisineApres) {
+    if (G.cuisine && !S_.cuis.ouverte && S_.serie >= BAL.cuisineApres) {
       S_.cuis.ouverte = true;
       msg("La cuisine est ouverte !", "Certaines commandes sont à cuisiner toi-même : passe la porte battante (touche C).", "ok", 5.5);
       sonCloche();
@@ -833,16 +666,9 @@
       if (tb.bulle) { tb.bulle.t += dt; if (tb.bulle.t > tb.bulle.dur) tb.bulle = null; }
       if (tb.refusT > 0) { tb.refusT -= dt; if (tb.refusT <= 0) { tb.plat = null; if (c.etape === "choix" && !S_.panel && !S_.dial) demanderChoix(tb.i); } }     // l'assiette refusée est enlevée, le serveur repart au passe-plats
       if (tb.platT > 0) { tb.platT -= dt; if (tb.platT <= 0 && tb.plat === "plat_rate") tb.plat = null; }
-      if (c.state === "enter" && c.t > 0.7) {
-        c.state = "call"; c.t = 0; sonClochette();
-        if (c.snob && !tb.bulle) {
-          tb.bulle = { lignes: c.snobOk ? ["Voilà un cadre", "digne de moi."] : ["Hmm… bien modeste,", "tout ceci."], t: 0, dur: 2.4 };
-          if (c.snobOk) fx({ img: "fx_coeur", x: tb.x, y: 470, vy: -70, dur: 1.4, scale: 0.2 });
-        } else if (c.charme && !tb.bulle) { tb.bulle = { lignes: ["Qu’il est beau,", "ce restaurant !"], t: 0, dur: 2.4 }; fx({ img: "fx_coeur", x: tb.x, y: 470, vy: -70, dur: 1.4, scale: 0.2 }); }
-      }
+      if (c.state === "enter" && c.t > 0.7) { c.state = "call"; c.t = 0; sonClochette(); }
       else if (clientAttend(c)) {
         if (!(S_.dial && S_.dial.table === tb.i)) c.patience -= (dt / c.patSec) * rate;       // pendant le dialogue, le client patiente
-        { const pl = smileyIdx(Math.max(0, c.patience)); if (c.palier === undefined) c.palier = pl; else if (pl !== c.palier) { c.palier = pl; c.flipAt = G.t; } }      // le sablier se retourne à chaque palier
         if (c.patience <= 0) { c.patience = 0; clientPart(tb, true); }
       } else if (c.state === "eat") {
         if (c.t > 1.4 && PLATS.includes(tb.plat)) tb.plat = "assiette_vide";
@@ -951,15 +777,12 @@
 
   // ------------------------------------------------------------------ dessin : décor et personnages
   // déco du resto en cours de dessin (papier peint, nappes, objets) : posée par rendre() ou par l'aperçu de l'atelier
-  let decoRendu = null, restoRendu = 0;
+  let decoRendu = null;
   const nappeCache = {};
-  function tableChoisie(i, d) {                                  // style de table du resto i (celui acheté et choisi, sinon la table de base)
-    const l = tablesResto(i); return (d && l.find((t) => t.id === d.table && possede(d, "table", t.id))) || l.find((t) => t.prix === 0) || l[0];
-  }
-  function tableImg(col, cle) {                                  // table avec la nappe choisie (voile de couleur, mis en cache)
-    const base = img(cle || "table_" + col), id = decoRendu ? decoRendu.nappes : "origine", N = NAPPES.find((x) => x.id === id);
+  function tableImg(col) {                                       // table avec la nappe choisie (voile de couleur, mis en cache)
+    const base = img("table_" + col), id = decoRendu ? decoRendu.nappes : "origine", N = NAPPES.find((x) => x.id === id);
     if (!base || !N || !N.voile) return base;
-    const k = (cle || col) + "|" + id;
+    const k = col + "|" + id;
     if (!nappeCache[k]) {
       const c = document.createElement("canvas"); c.width = base.width; c.height = base.height;
       const x = c.getContext("2d"); x.drawImage(base, 0, 0); x.globalCompositeOperation = "source-atop"; x.fillStyle = N.voile; x.fillRect(0, 0, c.width, c.height);
@@ -986,206 +809,40 @@
     M.pans.forEach((m, k) => { ctx.beginPath(); trace(m); if (k === 0) M.trous.forEach(trace); ctx.fill("evenodd"); });          // les rideaux (trous du pan du fond) ne sont pas teintés
     ctx.restore();
   }
-  // ------------------------------------------------------------------ placement des objets (chantier 8B)
-  // Mesures des 4 salles (px du canvas 1920×1080) : bande de mur tapissé où l'on accroche, hauteur max sous plafond, ligne où se posent les meubles,
-  // et éléments PEINTS dans l'image de fond (fenêtres, appliques) qu'aucun objet ne doit cacher.
-  // sol = ligne où les meubles posent leurs pieds (bas de la plinthe, mesuré sur l'image de fond : le chantier 8B les posait à 520, ils flottaient dans les salles 3 et 4) ;
-  // fenetres = les vraies fenêtres (sans les appliques) : les rideaux s'y accrochent ; mur.y1 = bas de la zone où l'on accroche (les cadres peuvent descendre un peu sur les lambris).
-  const SALLES = [
-    { mur: { x0: 170, x1: 1750, y0: 42, y1: 300 }, plafond: 0, base: 482, sol: 482, tapisY: 430, fixes: [[1250, 1720, 60, 250], [1450, 1530, 95, 200]], fenetres: [[1250, 1445, 60, 250], [1530, 1720, 60, 250]] },
-    { mur: { x0: 170, x1: 1750, y0: 100, y1: 415 }, plafond: 300, base: 520, sol: 545, tapisY: 735, fixes: [[1250, 1445, 210, 390], [1530, 1730, 210, 390], [1150, 1230, 240, 340], [1450, 1530, 240, 340]], fenetres: [[1250, 1445, 210, 390], [1530, 1730, 210, 390]] },
-    { mur: { x0: 170, x1: 1750, y0: 110, y1: 490 }, plafond: 330, base: 520, sol: 618, tapisY: 735, fixes: [[1030, 1390, 120, 620], [920, 1010, 200, 350]], fenetres: [[1030, 1390, 120, 620]] },
-    { mur: { x0: 170, x1: 1750, y0: 110, y1: 490 }, plafond: 330, base: 520, sol: 636, tapisY: 735, fixes: [[1400, 1760, 130, 630], [1325, 1415, 200, 350]], fenetres: [[1400, 1760, 130, 630]] },
-  ];
-  const MARGE_MUR = 20;                                              // un tableau reste à au moins 20 px du rail, de la porte et du passe-plats (3 px des autres obstacles) ; plus large, le village n’a plus de place pour ses cadres
-  const PART_TABLE_MAX = [0.45, 0.7];                                // part d'un meuble qu'une table (devant lui) peut cacher : on essaie d'abord 45 %, puis 70 % en dernier recours
-  const touche = (a, b, m) => a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m;
-  const aire = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  function obstaclesSalle(i) {
-    const R = RESTOS[i], S_i = SALLES[i];
-    const o = [{ ...HATCH_RECT, gros: true }, { ...DOOR, gros: true }, { x: RAIL.x, y: 0, w: RAIL.w, h: 232, gros: true }, { x: 15, y: 15, w: 430, h: 145 }, { x: 1695, y: 15, w: 205, h: 70 }];          // gros = passe-plats, porte, rail : les tableaux gardent MARGE_MUR autour
-    S_i.fixes.forEach((f) => o.push({ x: f[0], y: f[2], w: f[1] - f[0], h: f[3] - f[2] }));
-    ORDRE_OUVERTURE.slice(0, R.tablesMax).forEach((t) => o.push({ x: TABLE_X[t] - 102, y: TABLE_TOP - 22, w: 204, h: 330, table: true }));          // toutes les tables du resto, même pas encore ouvertes
-    return o;
-  }
-  const placeCache = {};
-  function placement(i, achats) {                                  // → { liste : objets posés, rates : objets sans place }
-    const ids = OBJETS.filter((o) => o.resto === i && achats.includes("objet:" + o.id) && imgOk(o));
-    const cle = i + "|" + ids.map((o) => o.id).join(",");
-    if (placeCache[cle]) return placeCache[cle];
-    const Sa = SALLES[i], tous = obstaclesSalle(i), tables = tous.filter((q) => q.table), fixes = tous.filter((q) => !q.table), poses = [], rates = [], tapis = [], rideaux = [];
-    const mil = [960]; for (let k = 1; k < 60; k++) { mil.push(960 + 15 * k, 960 - 15 * k); }          // abscisses essayées, du centre vers les bords (pas de 15 px : les petits espaces entre le passe-plats, la porte et le rail comptent)
-    const ordre = ids.slice().sort((a, b) => b.prix - a.prix);       // les plus beaux objets choisissent leur place en premier
-    const libre = (r, liste, m, mg) => !liste.some((q) => touche(r, q, q.gros && mg ? mg : m));          // mg = marge plus large autour des obstacles « gros » (rail, porte, passe-plats)
-    const ECH = [1, 0.85, 0.7, 0.55];
-    ordre.forEach((o) => {
-      const xs = o.x ? o.x : mil;
-      // un essai = un objet à une abscisse, une échelle, une vue : renvoie sa place, ou null ; « f » = part cachée par les tables (meubles seulement)
-      const essai = (cx, ech, fmax) => {
-        const vues = o.vues || [o.img], essais = []; let meilleur = null;
-        vues.forEach((v) => { essais.push({ v, flip: cx > 960 }); essais.push({ v, flip: cx <= 960 }); });
-        for (const e of essais) {
-          const im = img(e.v), iw = im.width, ih = im.height; let w, h, y, r, res = null;
-          if (o.zone === "tapis") {
-            w = o.w * ech; h = w * ih / iw; if (cx - w / 2 < 90 || cx + w / 2 > 1830) continue;
-            r = { x: cx - w / 2, y: Sa.tapisY - h / 2, w, h };
-            if (tapis.some((q) => touche(r, q, 6))) continue;
-            return { o, v: e.v, flip: false, ...r, f: 0 };
-          }
-          if (o.zone === "fenetre") continue;                       // traité à part (rideaux)
-          if (o.zone === "mur" || o.zone === "plafond") {
-            const M = Sa.mur, haut = o.zone === "plafond" ? Sa.plafond : M.y1 - M.y0 - 14, mg = o.zone === "mur" ? MARGE_MUR : 3;
-            if (o.zone === "plafond" && !haut) continue;
-            w = o.w * ech; h = w * ih / iw; if (h > haut) { h = haut; w = h * iw / ih; }
-            y = o.zone === "plafond" ? 0 : (o.y !== undefined ? o.y : M.y0 + 7);
-            if (cx - w / 2 < M.x0 || cx + w / 2 > M.x1) continue;
-            if (o.zone === "mur" && o.y === undefined) {              // plusieurs hauteurs possibles : en haut, en bas, au milieu
-              const ys = [M.y0 + 7, M.y0 + 7 + (M.y1 - M.y0) * 0.25, (M.y0 + M.y1 - h) / 2, M.y1 - 7 - h];
-              const yy = ys.find((v) => libre({ x: cx - w / 2, y: v, w, h }, tous, 3, mg) && libre({ x: cx - w / 2, y: v, w, h }, poses, 12)); if (yy === undefined) continue; y = yy;
-            }
-            r = { x: cx - w / 2, y, w, h };
-            if (!libre(r, tous, 3, mg) || !libre(r, poses, 12)) continue;
-            return { o, v: e.v, flip: false, ...r, f: 0 };
-          }
-          // sol / coin : les pieds sur la ligne du sol de la salle
-          const base = o.base || Sa.sol; h = o.h ? o.h * ech : o.w * ech * ih / iw; w = o.h ? h * iw / ih : o.w * ech;
-          if (!o.h && h > base - 50) { h = base - 50; w = h * iw / ih; }
-          y = base - h; if (cx - w / 2 < 25 || cx + w / 2 > 1895) continue;
-          r = { x: cx - w / 2, y, w, h };
-          if (o.zone !== "coin" && !libre(r, fixes, 3)) continue;
-          if (!libre(r, poses, 8)) continue;
-          const f = o.zone === "coin" ? 0 : tables.reduce((s_, q) => s_ + aire(r, q), 0) / (w * h);     // les tables sont devant le meuble : elles peuvent en cacher le pied, pas plus
-          if (f > fmax) continue;
-          res = { o, v: e.v, flip: e.flip, ...r, f };
-          if (!meilleur || f < meilleur.f - 1e-6) meilleur = res;
-        }
-        return meilleur;
-      };
-      let res = null;
-      if (o.zone === "fenetre") {                                    // rideaux : un par fenêtre de la salle (on n'en accroche pas ailleurs)
-        const v = o.vues ? o.vues[0] : o.img, im = img(v);
-        Sa.fenetres.forEach((F) => {                                 // le rideau encadre la fenêtre (il dépasse un peu) et ne gêne aucun autre objet : la fenêtre est déjà un obstacle
-          const fw = F[1] - F[0], fh = F[3] - F[2], h = Math.min(fw * 1.15 * im.height / im.width, fh + 24), w = h * im.width / im.height;
-          rideaux.push({ o, v, flip: false, x: (F[0] + F[1]) / 2 - w / 2, y: Math.max(0, F[2] - 12), w, h, f: 0, fenetre: true });
-        });
-        if (!Sa.fenetres.length) rates.push(o.id);
-        return;
-      }
-      for (const fmax of o.zone === "sol" ? PART_TABLE_MAX : [1]) {
-        for (const ech of ECH) {
-          if (o.zone === "sol") { for (const cx of xs) { const r = essai(cx, ech, fmax); if (r && (!res || r.f < res.f - 1e-6)) res = r; } }
-          else for (const cx of xs) { res = essai(cx, ech, fmax); if (res) break; }
-          if (res) break;
-        }
-        if (res) break;
-      }
-      if (!res) rates.push(o.id); else if (o.zone === "tapis") tapis.push(res); else poses.push(res);
-    });
-    return (placeCache[cle] = { liste: tapis.concat(poses.concat(rideaux).sort((a, b) => (a.y + a.h) - (b.y + b.h))), rates });
-  }
-  function dessinerObjets(d, i) {                                  // les objets achetés : tapis d'abord (au sol), puis le reste du fond vers l'avant
-    if (!d || i === undefined || i < 0) return;
-    placement(i, d.achats).liste.forEach((p) => {
-      const im = img(p.v); if (!im) return;
-      if (p.o.zone === "sol" || p.o.zone === "coin") { ctx.save(); ctx.fillStyle = "rgba(40,20,10,0.22)"; ctx.beginPath(); ctx.ellipse(p.x + p.w / 2, p.y + p.h - 2, p.w * 0.46, 9, 0, 0, 7); ctx.fill(); ctx.restore(); }
-      if (p.flip) { ctx.save(); ctx.translate(p.x + p.w, p.y); ctx.scale(-1, 1); ctx.drawImage(im, 0, 0, p.w, p.h); ctx.restore(); }
-      else ctx.drawImage(im, p.x, p.y, p.w, p.h);
-    });
+  function dessinerObjets(d) {                                   // les objets achetés (chacun à sa place sur le mur ou dans le coin)
+    if (!d) return;
+    const a = (id) => d.achats.includes("objet:" + id);
+    if (a("plante") && img("deco_plante")) dessiner("deco_plante", 100, 640, 0.34, 0.34, "bas");
+    if (a("lampe") && img("deco_lampe")) dessiner("deco_lampe", 1195 - img("deco_lampe").width * 0.4 / 2, 34, 0.4, 0.4, "haut");
+    if (a("horloge") && img("deco_horloge")) dessiner("deco_horloge", 1810 - img("deco_horloge").width * 0.4 / 2, 92, 0.4, 0.4, "haut");
+    if (a("ardoise") && img("deco_ardoise")) dessiner("deco_ardoise", ARDOISE.x - img("deco_ardoise").width * ARDOISE.s / 2, ARDOISE.y, ARDOISE.s, ARDOISE.s, "haut");
   }
   const ARDOISE = { x: 790, y: 196, s: 0.40 };      // mur du fond, entre la porte de la cuisine et la fenêtre (sous le rail des tickets)
-  // Sablier de patience (chantier 8A) : un par client, avec le numéro de table. Le sable se vide pendant un palier d'humeur (content → moyen → agacé…),
-  // puis le sablier se retourne et repart plein, de la couleur du palier suivant.
-  const PALIERS = [1, 0.85, 0.65, 0.45, 0.28, 0.12, 0], SABLE = ["#6bbf59", "#a8c93f", "#e8b33f", "#e8833a", "#d9473b", "#a82e24"];
-  // Côté du smiley et du sablier d'une table (chantier 8C) : par défaut à l'opposé de la main levée ; si le voisin de gauche a déjà pris la place entre les deux tables
-  // (les tables sont à 300 px, smiley + sablier prennent ~140 px), on passe de l'autre côté.
-  function coteIndic(tb) {
-    const mg = (t) => { const c = t.client; return !img(c.slug + "_appel") || MAIN_GAUCHE.includes(c.slug) ? 1 : -1; };
-    const tri = S_.tables.filter((t) => t.client && clientAttend(t.client)).sort((a, b) => a.x - b.x), pris = [];
-    for (const t of tri) {
-      const span = (cote) => (cote > 0 ? [t.x + 68, t.x + 210] : [t.x - 210, t.x - 68]), libre = (cote) => pris.every((q) => span(cote)[1] < q[0] || span(cote)[0] > q[1]);
-      let cote = mg(t); if (!libre(cote) && libre(-cote)) cote = -cote;
-      pris.push(span(cote)); if (t === tb) return cote;
-    }
-    return mg(tb);
-  }
-  function dessinerSablier(tb) {
-    const c = tb.client, p = Math.max(0, Math.min(1, c.patience)), idx = smileyIdx(p), hi = PALIERS[idx], lo = PALIERS[idx + 1];
-    const sable = Math.max(0, Math.min(1, (p - lo) / (hi - lo)));
-    const cote = coteIndic(tb);
-    const x = Math.max(70, Math.min(W - 70, tb.x + cote * 172)), y = 452;
-    const kf = !A.calme && c.flipAt !== undefined ? Math.min(1, (G.t - c.flipAt) / 0.7) : 1;
-    const fl = kf < 1 ? kf * kf * (3 - 2 * kf) : 1;                         // 0 → 1 : demi-tour du sablier
-    ctx.save(); ctx.translate(x, y); ctx.scale(0.95, 0.95);
-    ctx.fillStyle = "rgba(255,248,232,0.82)"; rr(-34, -52, 68, 150, 16); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 3; ctx.stroke();
-    ctx.save(); ctx.rotate(kf < 1 ? Math.PI * fl : 0);                       // pendant le retournement : le sable est tout en bas, il passe en haut
-    const hautY = -33, basY = 33, f = kf < 1 ? 0 : sable;
-    const verre = (haut) => { ctx.beginPath(); if (haut) { ctx.moveTo(-19, hautY); ctx.lineTo(19, hautY); ctx.lineTo(3, -2); ctx.lineTo(-3, -2); } else { ctx.moveTo(-3, 2); ctx.lineTo(3, 2); ctx.lineTo(19, basY); ctx.lineTo(-19, basY); } ctx.closePath(); };
-    ctx.fillStyle = "rgba(255,255,255,0.7)"; verre(true); ctx.fill(); verre(false); ctx.fill();
-    ctx.fillStyle = SABLE[kf < 1 ? c.palier : idx];
-    ctx.save(); verre(true); ctx.clip(); ctx.fillRect(-20, -2 - f * 31, 40, f * 31 + 1); ctx.restore();
-    ctx.save(); verre(false); ctx.clip(); const b = (1 - f) * 31; ctx.fillRect(-20, basY - b, 40, b + 1); ctx.restore();
-    if (f > 0.02 && f < 1 && p > 0) ctx.fillRect(-1.2, -2, 2.4, 4 + (1 - f) * 28);                         // filet de sable
-    ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 3; ctx.lineJoin = "round"; verre(true); ctx.stroke(); verre(false); ctx.stroke();
-    ctx.fillStyle = "#8a5a3c"; rr(-25, -41, 50, 9, 3); ctx.fill(); ctx.stroke(); rr(-25, 32, 50, 9, 3); ctx.fill(); ctx.stroke();
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(0, 70, 19, 0, 7); ctx.fillStyle = "#f6e9cf"; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = "#5a3a29"; ctx.stroke();
-    texte(String(tb.i + 1), 0, 71, 27, "#4a2f22");
-    ctx.restore();
-  }
-  // Passe-plats (chantier 8B) : une image par resto (bois, crème, palace), rognée au-dessus du boîtier (on retire le câble de la lampe) et ajustée au même emplacement contre le mur.
-  // sy = première ligne gardée ; ouv = ouverture et plat = point où se posent les assiettes, en pixels de l'image.
-  const PASSES = [
-    { img: "passe_plats_bois", sy: 45, ouv: { x: 117, y: 135, w: 527, h: 340 }, plat: { x: 359, y: 492 } },
-    { img: "passe_plats_creme", sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
-    { img: "passe_plats_creme", sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
-    { img: "passe_plats_palace", sy: 60, ouv: { x: 97, y: 145, w: 653, h: 420 }, plat: { x: 423, y: 586 } },
-  ];
-  let PASSE_F = 1;
-  ["passe_plats_bois", "passe_plats_creme", "passe_plats_palace"].forEach((n) => (LISTE[n] = "assets/salle/" + n + ".png"));
-  function dessinerPasse() {                                     // passe-plats encastré : l'image du resto, recalée dans l'emplacement du mur
-    const P = PASSES[restoRendu] || PASSES[0], nv = img(P.img);
-    if (!nv) {
-      const im = img("passe_plats"); if (!im) return;
-      const h = Math.min(HATCH_IMG.h, im.height);
-      ctx.drawImage(im, 0, 0, im.width, h, HATCH.x, HATCH.y, im.width * HS, h * HS);
-      return;
-    }
-    const hs = nv.height - P.sy, sc = Math.min(320 / nv.width, 190 / hs), w = nv.width * sc, h = hs * sc, x0 = HATCH_RECT.x + HATCH_RECT.w / 2 - w / 2, y0 = HATCH.y + 182 - h;
-    ctx.drawImage(nv, 0, P.sy, nv.width, hs, x0, y0, w, h);
-    Object.assign(HATCH_OUV, { x: x0 + P.ouv.x * sc, y: y0 + (P.ouv.y - P.sy) * sc, w: P.ouv.w * sc, h: P.ouv.h * sc });
-    Object.assign(HATCH_PLATE, { x: Math.round(x0 + P.plat.x * sc), y: Math.round(y0 + (P.plat.y - P.sy) * sc) });
-    PASSE_F = P.ouv.w * sc / (407 * HS);
-  }
   function dessinerTable(tb) {
-    const col = COULEURS[tb.i], g = GEOM[col], T = restoRendu > 0 ? tableChoisie(restoRendu, decoRendu) : null, neuve = T && T.img && img(T.img);
-    const tab = neuve ? tableImg(col, T.img) : tableImg(col);
-    if (tb.client) tb.client.haut = neuve ? T.haut || 0 : 0;
+    const col = COULEURS[tb.i], g = GEOM[col], tab = tableImg(col);
     if (!tab) return;
-    const sc = neuve ? T.larg / tab.width : S, tw = tab.width * sc, th = tab.height * sc;
-    const tx = tb.x - tw / 2, ty = neuve ? 624 - T.y1 * sc : TABLE_TOP;
+    const tx = tb.x - tab.width * S / 2, ty = TABLE_TOP;
     // chaise + client derrière la table
     if (tb.client) {
-      const ch = restoRendu > 0 && img(CHAISES[restoRendu]);
-      if (ch) { const D = CHAISE_DIM[restoRendu], hh = ch.height * D.w / ch.width; ctx.drawImage(ch, tb.x - D.w / 2, D.bas - hh, D.w, hh); }
-      else dessiner("chaise", tb.x, TABLE_TOP + 60 * S + 120, 0.70, 0.70, "bas");
+      dessiner("chaise", tb.x, ty + 60 * S + 120, 0.70, 0.70, "bas");
       dessinerClient(tb);
     }
-    ctx.drawImage(tab, tx, ty, tw, th);
+    ctx.drawImage(tab, tx, ty, tab.width * S, tab.height * S);
     // plaque de numéro
-    dessiner("plaque_numero", tb.x, TABLE_TOP + 148 * S, 0.17, 0.17, "centre");
-    texte(String(tb.i + 1), tb.x, TABLE_TOP + 148 * S + 1, 24, "#5a3a29");
+    dessiner("plaque_numero", tb.x, ty + 148 * S, 0.17, 0.17, "centre");
+    texte(String(tb.i + 1), tb.x, ty + 148 * S + 1, 24, "#5a3a29");
     // plat posé sur le plateau
     if (tb.plat) {
-      const sx = neuve ? 78 / 388 : g.plateau.w * 0.92 * S / 388;
-      dessiner(tb.plat, neuve ? tb.x : tx + g.plateau.cx * S, neuve ? ty + (T.y1 + 2) * sc : ty + (g.plateau.y1 + 2) * S, sx, sx * 0.72, "bas");
+      const sx = g.plateau.w * 0.92 * S / 388;
+      dessiner(tb.plat, tx + g.plateau.cx * S, ty + (g.plateau.y1 + 2) * S, sx, sx * 0.72, "bas");
     }
     // smiley d'humeur
     if (tb.client && (clientAttend(tb.client))) {
       const c = tb.client, k = ["smiley_1_ravi", "smiley_2_content", "smiley_3_neutre", "smiley_4_presse", "smiley_5_mecontent", "smiley_6_furieux"][smileyIdx(c.patience)];
       const rebond = A.calme ? 0 : Math.sin(G.t * (c.patience < 0.3 ? 9 : 3) + tb.i) * (c.patience < 0.3 ? 5 : 2);
-      dessiner(k, tb.x + coteIndic(tb) * 98, 470 + rebond, 0.24, 0.24, "centre");      // le smiley se met du côté opposé à la main levée (sauf si le voisin occupe la place)
+      const mainG = !img(c.slug + "_appel") || MAIN_GAUCHE.includes(c.slug);      // le smiley se met du côté opposé à la main levée
+      dessiner(k, tb.x + (mainG ? 98 : -98), 470 + rebond, 0.24, 0.24, "centre");
     }
-    if (tb.client && clientAttend(tb.client)) dessinerSablier(tb);
     if (tb.bulle) {                           // le client parle
       const b = tb.bulle, a = Math.min(1, b.t / 0.15, (b.dur - b.t) / 0.3), bx = Math.max(165, Math.min(W - 165, tb.x)), by = 372;
       ctx.save(); ctx.globalAlpha = Math.max(0, a);
@@ -1197,7 +854,6 @@
       ctx.restore();
     }
     if (tb.client && tb.client.vip && tb.client.state !== "leave") texte("VIP", tb.x, 390, 26, "#e8b33f", "center", "#5a3a29");
-    if (tb.client && tb.client.snob && tb.client.state !== "leave") texte("Snob", tb.x, 390, 26, "#d6b8ec", "center", "#4a2f5a");
   }
 
   function dessinerClient(tb) {
@@ -1207,12 +863,12 @@
     if (c.state === "leave") a = Math.max(0, 1 - c.t / 0.8);
     ctx.save(); ctx.globalAlpha = a;
     const appel = c.state === "call" && (A.calme || Math.sin(G.t * 6 + tb.i) > 0);   // calme : la main reste levée, sans clignoter
-    const sprite = (c.recol ? recolorer(c.slug, appel ? "appel" : "attente", c.recol) : null) || img(c.slug + (appel ? "_appel" : "_attente")) || img(c.slug + "_attente");
+    const sprite = img(c.slug + (appel ? "_appel" : "_attente")) || img(c.slug + "_attente");
     const montee = c.state === "enter" && !A.calme ? Math.pow(1 - Math.min(1, c.t / 0.6), 3) * 60 : 0;      // il glisse jusqu'à sa chaise
     const resp = (A.calme ? 0 : Math.sin(G.t * 2 + c.bob) * 2) + montee;
     if (sprite) {
-      const sc = CLIENT_W * (CLIENT_ECH[c.slug] || (NOUVEAUX[c.slug] ? 1.2 : 1)) / (img(c.slug + "_attente") || sprite).width;
-      ctx.drawImage(sprite, x - sprite.width * sc / 2, y - sprite.height * sc + resp - (c.haut || 0) + (CLIENT_DY[c.slug] || 0), sprite.width * sc, sprite.height * sc);
+      const sc = CLIENT_W * (CLIENT_ECH[c.slug] || 1) / (img(c.slug + "_attente") || sprite).width;
+      ctx.drawImage(sprite, x - sprite.width * sc / 2, y - sprite.height * sc + resp + (CLIENT_DY[c.slug] || 0), sprite.width * sc, sprite.height * sc);
     } else silhouetteClient(x, y + resp, c, appel);
     ctx.restore();
   }
@@ -1831,7 +1487,7 @@
       const tb = S_.tables[i], c = tb.client;
       if (sv.carry || (c && c.state === "call")) { pilule(tb.x, 378 + bob, sv.carry ? 100 : 62, sv.carry ? "Espace : servir" : "Espace", sv.carry ? 20 : 26); return; }
     }
-    if (auPasse() && !sv.carry && (commandesEnAttente().length || S_.hatchQ.length)) pilule(HATCH.x + HATCH_RECT.w / 2, 440 + bob, 128, "Espace : passe-plats", 22);
+    if (auPasse() && !sv.carry && (commandesEnAttente().length || S_.hatchQ.length)) pilule(HATCH.x + HATCH_RECT.w / 2, 478 + bob, 128, "Espace : passe-plats", 22);
   }
 
   // bulle de dialogue au-dessus de la table : le client parle (bulle crème, avec une pointe vers lui), le serveur répond (bulle verte)
@@ -1907,10 +1563,10 @@
     texte(nbEtoilesGuide() + " étoile" + (nbEtoilesGuide() > 1 ? "s" : "") + " sur 3", 1400, 955, 26, "#f6e9cf", "center", "#5a3a29");
     BTN.reglages = bouton(W - 340, 28, 310, 70, "Réglages (R)", false, 30);
     BTN.carte = bouton(30, 112, 400, 62, "← Carte (Échap)", false, 26);
-    BTN.atelier = G.libre ? null : bouton(30, 190, 400, 62, modeDur() ? "Atelier déco (D)" : "Atelier déco (difficile)", false, 26);
-    BTN.mode = [bouton(30, 28, 195, 70, "Facile", !modeDur(), 30), bouton(235, 28, 195, 70, "Difficile", modeDur(), 30)];
+    BTN.atelier = G.libre ? null : bouton(30, 190, 400, 62, "Atelier déco (D)", false, 26);
+    BTN.cuisine = bouton(30, 28, 400, 70, G.cuisine ? "Cuisine : oui" : "Cuisine : non", !!G.cuisine, 30);
     texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
-    texte(modeDur() ? "Mode difficile : après quelques clients servis sans erreur, la cuisine s’ouvre (tu écris toi-même les plats) et l’atelier déco est débloqué." : "Mode facile : la salle seule, sans cuisine ni atelier déco. Passe en « Difficile » pour la cuisine et la déco.", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
+    if (G.cuisine) texte("Après quelques clients servis sans erreur, la cuisine s’ouvre : tu écris toi-même les plats !", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
     const bob = A.calme ? 0 : Math.sin(G.t * 2) * 5;                       // le chef et le serveur accueillent le joueur
     const chef = img("chef_bravo"), sv = img("serveur_content");
     if (chef) { const h = 330, w = chef.width * h / chef.height; ctx.drawImage(chef, 250 - w / 2, 960 - h + bob, w, h); }
@@ -2237,31 +1893,27 @@
 
   // ------------------------------------------------------------------ l'atelier déco (chantier 7c)
   const AT = { rx: 40, ry: 300, rw: 700, rh: 88, pas: 98, ax: 780, ay: 130, aw: 1100 };       // lignes d'objets à gauche, aperçu de la salle à droite
-  function toast(texte_, dur_) { G.toast = { texte: texte_, jusqu: G.t + (dur_ || 4) }; }
   function ouvrirAtelier() {
-    if (!modeDur()) { toast("L’atelier déco est réservé au mode difficile (bouton « Difficile » sur l’écran de départ d’un resto).", 4.5); sonKo(); return; }
     G.atelier = { resto: G.camp.restos[G.resto] && G.camp.restos[G.resto].ouvert ? G.resto : 0, onglet: 0, sel: 0, essai: null, msg: null };
     ouvrir("atelier"); sonClic();
   }
-  const itemsAtelier = () => listeAtelier(CATALOGUE[G.atelier.onglet].cle, G.atelier.resto);
+  const itemsAtelier = () => CATALOGUE[G.atelier.onglet].liste;
   const decoAtelier = () => G.camp.restos[G.atelier.resto].deco;
   function decoAvecEssai(d, essai) {                              // aperçu : la déco du resto avec l'objet survolé en plus (sans l'acheter)
     if (!essai) return d;
-    const c = { papier: d.papier, nappes: d.nappes, table: d.table, achats: d.achats.slice(), charme: 0 };
+    const c = { papier: d.papier, nappes: d.nappes, achats: d.achats.slice() };
     if (essai.cle === "objet") { if (!c.achats.includes("objet:" + essai.id)) c.achats.push("objet:" + essai.id); } else c[essai.cle] = essai.id;
     return c;
   }
   function acheterOuChoisir(cle, id) {                            // achat (si les pièces suffisent), ou pose d'un papier / d'une nappe déjà possédé
-    const A_ = G.atelier, i = A_.resto, d = G.camp.restos[i].deco, C = CATALOGUE.find((c) => c.cle === cle), it = C.liste.find((x) => x.id === id), prix = prixDeco(it.prix, i, cle);
+    const A_ = G.atelier, i = A_.resto, d = G.camp.restos[i].deco, C = CATALOGUE.find((c) => c.cle === cle), it = C.liste.find((x) => x.id === id), prix = prixDeco(it.prix, i);
     if (possede(d, cle, id)) {
       if (cle === "objet") { A_.msg = { texte: "« " + it.nom + " » est déjà dans ton resto.", jusqu: G.t + 3 }; return; }
-      if (d[cle] !== id) { d[cle] = id; d.charme = Math.max(d.charme, BAL.decoClientsCouleur); sauver(); sonClic(); }
+      if (d[cle] !== id) { d[cle] = id; sauver(); sonClic(); }
       return;
     }
-    if (cle === "objet" && placement(i, d.achats.concat("objet:" + id)).rates.length) { A_.msg = { texte: "Il n’y a plus de place pour « " + it.nom + " » dans ce resto : libère un emplacement ou choisis autre chose.", jusqu: G.t + 4 }; sonKo(); return; }
     if (G.camp.argent < prix) { A_.msg = { texte: "Il te manque " + (prix - G.camp.argent) + " pièces pour « " + it.nom + " ». Rejoue un service pour en gagner !", jusqu: G.t + 4 }; sonKo(); return; }
     G.camp.argent -= prix; d.achats.push(cle + ":" + id); if (cle !== "objet") d[cle] = id;
-    d.charme = Math.min(99, cle === "objet" ? Math.max(1, Math.round(BAL.decoClients * lassitude(it, i))) : cle === "table" ? BAL.decoClients : BAL.decoClientsCouleur);          // clients charmés par le changement
     A_.msg = { texte: "Acheté : " + it.nom + " (− " + prix + " pièces).", jusqu: G.t + 3, ok: true }; sauver(); sonOk();
   }
   function changerRestoAtelier(i) {
@@ -2269,34 +1921,32 @@
     G.atelier.resto = i; G.atelier.sel = 0; sonClic();
   }
   function dessinerSalleApercu(i, d, x0, y0, w) {                 // la salle du resto i (tables vides) en miniature avec la déco d
-    const k = w / W, R = RESTOS[i], bgk = img(R.salle) ? R.salle : "bg_salle", avant = decoRendu, avantR = restoRendu; restoRendu = i;
+    const k = w / W, R = RESTOS[i], bgk = img(R.salle) ? R.salle : "bg_salle", avant = decoRendu;
     ctx.save(); ctx.translate(x0, y0); ctx.scale(k, k); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
     if (!dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (R.tint && bgk === "bg_salle") teinter(R.tint);
-    decoRendu = d; papierPeint(d, i); dessinerObjets(d, i);
-    dessinerPasse();
+    decoRendu = d; papierPeint(d, i); dessinerObjets(d);
+    dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
     ORDRE_OUVERTURE.slice(0, R.tablesMax).sort((a, b) => a - b).forEach((t) => dessinerTable({ i: t, x: TABLE_X[t], client: null, plat: null, bulle: null }));
-    decoRendu = avant; restoRendu = avantR; ctx.restore();
+    decoRendu = avant; ctx.restore();
     ctx.lineWidth = 8; ctx.strokeStyle = "#5a3a29"; ctx.strokeRect(x0, y0, w, H * k);
   }
   function pastille(it, cle, x, y, r) {                           // petit visuel de l'objet dans la liste
-    if (cle === "objet" || (cle === "table" && it.img)) { const im = img(it.img); if (im) { const s = (2 * r) / Math.max(im.width, im.height); ctx.drawImage(im, x - im.width * s / 2, y - im.height * s / 2, im.width * s, im.height * s); } return; }
+    if (cle === "objet") { const im = img(it.img); if (im) { const s = (2 * r) / Math.max(im.width, im.height); ctx.drawImage(im, x - im.width * s / 2, y - im.height * s / 2, im.width * s, im.height * s); } return; }
     ctx.fillStyle = it.pastille; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = "#3b2415"; ctx.stroke();
   }
   function dessinerAtelier() {
     const at = G.atelier, i = at.resto, R = RESTOS[i], d = G.camp.restos[i].deco, C = CATALOGUE[at.onglet];
     const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#f7e3b8"); g.addColorStop(1, "#e3b27a"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     texte("Atelier déco", 40, 70, 72, "#f6e9cf", "left", "#5a3a29");
-    texte(R.titre + " — papiers et nappes × " + String(PRIX_RESTO[i]).replace(".", ","), 40, 138, 34, ENCRE(), "left", null, "normal");
+    texte(R.titre + " — prix × " + String(PRIX_RESTO[i]).replace(".", ","), 40, 138, 34, ENCRE(), "left", null, "normal");
     texte(G.camp.argent + " pièces", W - 40, 62, 44, "#fff", "right", "#5a3a29");
     dessiner("fx_piece", W - 40 - ctx.measureText(G.camp.argent + " pièces").width - 70, 18, 0.2, 0.2, "haut");
-    BTN.onglets = CATALOGUE.map((c, k) => bouton(40 + k * 175, 180, 165, 70, c.titre + " (" + (k + 1) + ")", at.onglet === k, 22));
+    BTN.onglets = CATALOGUE.map((c, k) => bouton(40 + k * 240, 180, 225, 70, c.titre + " (" + (k + 1) + ")", at.onglet === k, 26));
     // objets du catalogue
     at.essai = null; BTN.items = [];
-    const LL = itemsAtelier(); at.top = Math.max(0, Math.min(at.top || 0, LL.length - 6)); if (at.sel < at.top) at.top = at.sel; if (at.sel >= at.top + 6) at.top = at.sel - 5;
-    LL.forEach((it, k) => {
-      if (k < at.top || k >= at.top + 6) return;
-      const y = AT.ry + (k - at.top) * AT.pas, prix = prixDeco(it.prix, i, C.cle), a = possede(d, C.cle, it.id), pose = a && choisi(d, C.cle, it.id), peut = G.camp.argent >= prix;
+    C.liste.forEach((it, k) => {
+      const y = AT.ry + k * AT.pas, prix = prixDeco(it.prix, i), a = possede(d, C.cle, it.id), pose = a && choisi(d, C.cle, it.id), peut = G.camp.argent >= prix;
       const r = { x: AT.rx, y, w: AT.rw, h: AT.rh }, sur = dans(r, G.mouse); if (sur) at.sel = k;
       const sel = at.sel === k;
       if (sel) at.essai = { cle: C.cle, id: it.id };
@@ -2306,50 +1956,28 @@
       if (pose) texte(C.cle === "objet" ? "✓ Dans ton resto" : "✓ Posé", r.x + r.w - 24, r.y + r.h / 2 + 2, 26, "#2f6a2f", "right");
       else if (a) texte("Poser", r.x + r.w - 24, r.y + r.h / 2 + 2, 28, "#8a3b1f", "right");
       else texte(prix + " pièces", r.x + r.w - 24, r.y + r.h / 2 + 2, 28, peut ? "#2f6a2f" : "#a82e24", "right");
-      BTN.items.push(Object.assign(r, { cle: C.cle, id: it.id, k }));
+      BTN.items.push(Object.assign(r, { cle: C.cle, id: it.id }));
     });
-    BTN.defil = null;
-    if (LL.length > 6) {                                           // chantier 8C : défilement au toucher (boutons ▲ ▼, glissement du doigt, molette)
-      const yb = AT.ry + 6 * AT.pas + 8;
-      BTN.defil = { haut: bouton(AT.rx, yb, 150, 70, "▲", false, 34), bas: bouton(AT.rx + AT.rw - 150, yb, 150, 70, "▼", false, 34) };
-      texte((at.top + 1) + "–" + Math.min(LL.length, at.top + 6) + " sur " + LL.length, AT.rx + AT.rw / 2, yb + 36, 30, ENCRE(), "center", null, "normal");
-    }
     // aperçu en direct : la salle de ce resto avec l'objet survolé
     dessinerSalleApercu(i, decoAvecEssai(d, at.essai), AT.ax, AT.ay, AT.aw);
     texte(at.essai && !possede(d, at.essai.cle, at.essai.id) ? "Aperçu — pas encore acheté" : "Ta salle", AT.ax + AT.aw / 2, AT.ay + 619 + 34, 28, ENCRE(), "center", null, "normal");
     // choix du resto
     BTN.restosAt = RESTOS.map((Rk, k) => { const ouv = G.camp.restos[k].ouvert; const b = bouton(AT.ax + k * 280, 840, 265, 70, ouv ? (k + 1) + ". " + Rk.titre : (k + 1) + ". Verrouillé", i === k, 23); if (!ouv) { ctx.fillStyle = "rgba(60,40,30,0.45)"; rr(b.x, b.y, b.w, b.h, 20); ctx.fill(); } return b; });
-    texte("Ici, les pièces rapportent × " + String(R.coef).replace(".", ",") + " : rejoue ce resto pour t’équiper, puis monte au suivant !", AT.ax + AT.aw / 2, 950, 24, ENCRE(), "center", null, "normal");
+    texte("Ici, les pièces rapportent × " + String(R.coef).replace(".", ",") + " mais la déco coûte × " + String(PRIX_RESTO[i]).replace(".", ",") + " : rejoue chaque resto pour t’équiper !", AT.ax + AT.aw / 2, 950, 24, ENCRE(), "center", null, "normal");
     if (at.msg && G.t < at.msg.jusqu) { ctx.fillStyle = at.msg.ok ? "rgba(47,106,47,0.92)" : "rgba(60,30,20,0.88)"; rr(490, 988, 1390, 60, 18); ctx.fill(); texte(at.msg.texte, 1185, 1019, 28, "#fff"); }
     BTN.retourAt = bouton(40, 988, 420, 70, "← Retour (Échap)", false, 28);
-    texte(G.tactile ? "Touche un objet pour le voir, touche encore pour l’acheter · glisse pour faire défiler" : "↑ ↓ choisir · Entrée : acheter · ← → : changer de resto", 1240, 1062, 20, ENCRE(), "center", null, "normal");
+    texte("↑ ↓ choisir · Entrée : acheter · ← → : changer de resto", 1240, 1062, 20, ENCRE(), "center", null, "normal");
   }
   function clicAtelier(p) {
     const at = G.atelier;
     if (dans(BTN.retourAt, p)) { G.mode = G.retourDe && G.retourDe !== "atelier" ? G.retourDe : "carte"; sonClic(); return; }
-    const o = (BTN.onglets || []).findIndex((b) => dans(b, p)); if (o >= 0) { at.onglet = o; at.sel = 0; at.top = 0; sonClic(); return; }
+    const o = (BTN.onglets || []).findIndex((b) => dans(b, p)); if (o >= 0) { at.onglet = o; at.sel = 0; sonClic(); return; }
     const r = (BTN.restosAt || []).findIndex((b) => dans(b, p)); if (r >= 0) { changerRestoAtelier(r); return; }
-    if (BTN.defil) { if (dans(BTN.defil.haut, p)) { defilerAtelier(-1); return; } if (dans(BTN.defil.bas, p)) { defilerAtelier(1); return; } }
-    const it = (BTN.items || []).find((b) => dans(b, p));
-    if (it) {
-      if (G.tactile && at.sel !== it.k) { at.sel = it.k; at.msg = { texte: "Aperçu : touche encore une fois pour acheter ou poser.", jusqu: G.t + 3 }; sonClic(); return; }          // au doigt : 1er toucher = aperçu, 2e = achat
-      acheterOuChoisir(it.cle, it.id);
-    }
-  }
-  function defilerAtelier(d) {                                      // d = +1 / −1 : fait glisser la liste d'une ligne
-    const at = G.atelier, n = itemsAtelier().length; if (n <= 6) return;
-    at.top = Math.max(0, Math.min(n - 6, (at.top || 0) + d)); at.sel = Math.max(at.top, Math.min(at.top + 5, at.sel)); sonClic();
+    const it = (BTN.items || []).find((b) => dans(b, p)); if (it) acheterOuChoisir(it.cle, it.id);
   }
 
   // ------------------------------------------------------------------ rendu
-  function dessinerToast() {                                       // petit message d'information (écrans hors partie)
-    const t = G.toast; if (!t || G.t >= t.jusqu) return;
-    const a = Math.min(1, (t.jusqu - G.t) / 0.4);
-    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = "rgba(60,30,20,0.92)"; rr(W / 2 - 700, 960, 1400, 70, 20); ctx.fill();
-    texte(t.texte, W / 2, 996, 26, "#fff"); ctx.restore();
-  }
-  function rendre() { rendre0(); dessinerToast(); }
-  function rendre0() {
+  function rendre() {
     ctx.clearRect(0, 0, W, H);
     if (G.mode === "accueil") { dessinerAccueil(); return; }
     if (G.mode === "carte") { dessinerCarte(); return; }
@@ -2358,7 +1986,7 @@
     const R_ = S_ && (G.mode === "play" || G.mode === "over") ? S_.ctx : null, bgk = R_ && R_.salle && img(R_.salle) ? R_.salle : "bg_salle";
     if (!enCuisine && !dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (!enCuisine && R_ && R_.tint && bgk === "bg_salle") teinter(R_.tint);
-    const di = R_ && R_.id >= 0 ? R_.id : G.resto; restoRendu = di; decoRendu = modeDur() ? G.camp.restos[di].deco : decoVide();          // entraînement libre : déco du resto choisi ; mode facile : déco de base
+    const di = R_ && R_.id >= 0 ? R_.id : G.resto; decoRendu = G.camp.restos[di].deco;          // entraînement libre : déco du resto choisi
     if (!enCuisine && R_) papierPeint(decoRendu, di);
     if (G.mode === "title") { dessinerTitre(); return; }
     if (G.mode === "settings") { dessinerReglages(); return; }
@@ -2368,11 +1996,11 @@
     if (!S_) return;
     if (enCuisine) dessinerCuisine();
     else {
-      dessinerObjets(decoRendu, di);                                         // objets achetés à l'atelier
+      dessinerObjets(decoRendu);                                         // objets achetés à l'atelier
       // passe-plats et plats prêts
-      dessinerPasse();
-      if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH_OUV.x, HATCH_OUV.y, HATCH_OUV.w, HATCH_OUV.h, 12); ctx.stroke(); ctx.restore(); }
-      S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = HATCH_PLATE.x + (i - (a.length - 1) / 2) * 82 * PASSE_F; dessiner(h.dish, x, HATCH_PLATE.y, 0.19 * PASSE_F, 0.141 * PASSE_F, "bas"); texte(String(h.table + 1), x + 44 * PASSE_F, HATCH_PLATE.y - 38 * PASSE_F, Math.round(30 * Math.max(0.8, PASSE_F)), "#fff", "center", "#5a3a29"); });
+      dessiner("passe_plats", HATCH.x, HATCH.y, HATCH.s, HATCH.s, "haut");
+      if (commandesEnAttente().length && !S_.panel && !A.calme) { ctx.save(); ctx.globalAlpha = 0.55 + 0.4 * Math.sin(G.t * 5); ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 7; rr(HATCH.x + 27, HATCH.y + 2, 387, 168, 14); ctx.stroke(); ctx.restore(); }
+      S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = HATCH_PLATE.x + (i - (a.length - 1) / 2) * 107; dessiner(h.dish, x, HATCH_PLATE.y, 0.25, 0.186, "bas"); texte(String(h.table + 1), x + 58, HATCH_PLATE.y - 50, 36, "#fff", "center", "#5a3a29"); });
       dessinerPorteSalle();
       dessinerRail();
       const sv = S_.serveur, derriere = sv.y < 800;
@@ -2405,7 +2033,7 @@
       else if (dans(BTN.reglages, p)) { ouvrir("settings"); sonClic(); }
       else if (dans(BTN.carte, p)) { G.mode = "carte"; sonClic(); }
       else if (BTN.atelier && dans(BTN.atelier, p)) ouvrirAtelier();
-      else if (BTN.mode && BTN.mode.some((b, k) => dans(b, p) && (G.difficile = k) >= 0)) { sauver(); sonClic(); }
+      else if (dans(BTN.cuisine, p)) { G.cuisine = G.cuisine ? 0 : 1; sauver(); sonClic(); }
       else if (dans(BTN.jouer, p)) { nouvellePartie(); sonClic(); }
       else if (dans(BTN.nom, p)) { ouvrirNom(); sonClic(); }
       else if (dans(BTN.presse, p)) { ouvrir("presse"); sonClic(); }
@@ -2447,7 +2075,7 @@
     for (let k = 0; k < S_.tickets.length; k++) {         // clic sur un ticket du rail : aller choisir l'assiette de cette commande
       if (dans(ticketRect(k), p)) { const t = S_.tickets[k], c = S_.tables[t.table].client; if (c && c.ticket === t.id && c.etape === "choix") demanderChoix(t.table); return; }
     }
-    if (dans(HATCH_RECT, p) && p.y < HATCH_RECT.y + HATCH_RECT.h + 30) { agirAuPasse(); return; }
+    if (dans(HATCH_RECT, p) && p.y < 400) { agirAuPasse(); return; }
     for (const tb of S_.tables) {
       if (!tableActive(tb.i)) continue;
       if (Math.abs(p.x - tb.x) < 115 && p.y > 330 && p.y < 830) {
@@ -2458,17 +2086,7 @@
   }
   cv.addEventListener("mousemove", (e) => { G.mouse = pos(e); cv.style.cursor = "pointer"; });
   cv.addEventListener("click", (e) => clic(pos(e)));
-  // glissement du doigt (ou molette) sur la liste de l'atelier : la liste défile d'une ligne tous les ~60 px de glissement ; un glissement ne déclenche jamais d'achat
-  let glisse = null;
-  cv.addEventListener("touchstart", (e) => { G.tactile = true; glisse = e.touches[0] ? { y: pos(e.touches[0]).y, bouge: false } : null; }, { passive: true });
-  cv.addEventListener("touchmove", (e) => {
-    if (!glisse || !e.touches[0] || G.mode !== "atelier") return;
-    const p = pos(e.touches[0]), dy = p.y - glisse.y;
-    if (Math.abs(dy) > AT.pas * 0.6) { defilerAtelier(dy < 0 ? 1 : -1); glisse.y = p.y; glisse.bouge = true; }
-    if (glisse.bouge) e.preventDefault();
-  }, { passive: false });
-  cv.addEventListener("wheel", (e) => { if (G.mode === "atelier") { defilerAtelier(e.deltaY > 0 ? 1 : -1); e.preventDefault(); } }, { passive: false });
-  cv.addEventListener("touchend", (e) => { if (glisse && glisse.bouge) { glisse = null; e.preventDefault(); return; } if (e.changedTouches[0]) { const p = pos(e.changedTouches[0]); G.mouse = p; clic(p); e.preventDefault(); } }, { passive: false });
+  cv.addEventListener("touchend", (e) => { if (e.changedTouches[0]) { const p = pos(e.changedTouches[0]); G.mouse = p; clic(p); e.preventDefault(); } }, { passive: false });
   function annulerPanneau() { S_.panel = null; }
   function fermerArticle() { S_.article = null; sonClic(); }
   function ouvrirNom() {
@@ -2512,7 +2130,7 @@
       else if (k === "ArrowRight") { e.preventDefault(); for (let j = 1; j <= RESTOS.length; j++) { const t = (at.resto + j) % RESTOS.length; if (G.camp.restos[t].ouvert) { changerRestoAtelier(t); break; } } }
       else if (k === "ArrowLeft") { e.preventDefault(); for (let j = 1; j <= RESTOS.length; j++) { const t = (at.resto + RESTOS.length - j) % RESTOS.length; if (G.camp.restos[t].ouvert) { changerRestoAtelier(t); break; } } }
       else if (k === "Enter" || k === " ") { e.preventDefault(); const it = itemsAtelier()[at.sel]; if (it) acheterOuChoisir(CATALOGUE[at.onglet].cle, it.id); }
-      else if (k === "1" || k === "2" || k === "3" || k === "4") { at.onglet = Number(k) - 1; at.sel = 0; at.top = 0; sonClic(); }
+      else if (k === "1" || k === "2" || k === "3") { at.onglet = Number(k) - 1; at.sel = 0; sonClic(); }
       return;
     }
     if (G.mode === "nom") {                                           // saisie du nom du resto (le champ caché reçoit les lettres)
@@ -2590,7 +2208,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    G, ACCU, RESTOS, SALLES, arriveeService, lassitude, PASSES, coteIndic, defilerAtelier, HATCH_OUV, HATCH_PLATE, carteGeo, mursDe, PAPIERS, NAPPES, OBJETS, TABLES, CHAISES, obstaclesSalle, satisfactionDeco, recolorer, tirerClient, nouveauClient, CASTING, placement, listeAtelier, tableChoisie, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
+    G, ACCU, RESTOS, carteGeo, mursDe, PAPIERS, NAPPES, OBJETS, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k] && !/^bg_(carte|titre_\d|salle_\d)$/.test(k)); },
   };
