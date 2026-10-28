@@ -66,7 +66,8 @@
   const HATCH_ZONE = { x: HATCH.x + Math.round(HATCH_RECT.w / 2), portee: 220 };   // au clavier : se placer dans cette zone du couloir, puis Espace
   const SERVEUR_H = 370;                   // hauteur du serveur au premier plan (les tables sont plus loin : il doit être plus grand qu'elles)
   const TRAY = { x: 62 * SERVEUR_H / 300, y: -232 * SERVEUR_H / 300 };   // plateau du serveur (repère local, serveur tourné vers la droite)
-  const CLIENT_W = 180;                    // largeur de la toile du client (chantier 5 : 230 → 200 ; chantier 8C : 200 → 180, encore 10 % trop grands face au serveur)
+  const CLIENT_W = 190;                    // largeur de la toile du client (chantier 5 : 230 → 200 ; chantier 8C : 200 → 180 : trop petit pour les anciens ; chantier 9B : 190)
+  const NOUVEAUX_ECH = 1.0;                // taille des nouveaux clients (patrons recolorables) par rapport aux anciens : 1,2 puis 1,2 × 180 étaient encore trop gros → 1,0 × 190
   const CLIENT_ECH = { client_01_garcon: 0.86, client_02_papy: 1.15, client_03_bouclee: 0.88, client_04_blonde: 0.85, client_05_mamie: 0.9, client_06_moustachu: 1.32, client_07_critique: 1.05 };   // 7d+ : jeunes femmes et enfant réduits, moustachu agrandi
   const CLIENT_DY = { client_06_moustachu: -8 };                // décalage vertical (négatif = remonte) : le moustachu ne doit pas s'enfoncer dans la table   // même taille de tête pour tous
   const PERS_LONG = ["1re personne du singulier", "2e personne du singulier", "3e personne du singulier", "1re personne du pluriel", "2e personne du pluriel", "3e personne du pluriel"];
@@ -504,11 +505,12 @@
     const prime = Math.round(GUIDE.bonusSucces * cx.coef); S_.score += prime; r.argent += prime; G.camp.argent += prime;
     let ouvre = "";
     if (cx.id < RESTOS.length - 1 && !G.camp.restos[cx.id + 1].ouvert) { G.camp.restos[cx.id + 1].ouvert = true; ouvre = RESTOS[cx.id + 1].titre; }
+    S_.apresSucces = premier ? (cx.id < RESTOS.length - 1 ? "choix" : "carte") : null;          // 9B : à la 1re réussite d'un resto, on quitte le service (choix puis carte)
     const art = cx.id === RESTOS.length - 1 ? 4 : Math.min(3, cx.id + 1);                  // un article par resto ; le Palace a le sien (« légende », chantier 7E)
     if (premier && cx.id === RESTOS.length - 1) G.camp.franchise.attente = true;          // 1re réussite du Palace : l'émission Toque chef se lance au retour sur la carte
-    if (!aGagne(art)) publier(art); else sonFanfare();
+    if (!aGagne(art)) publier(art); else { sonFanfare(); if (S_.apresSucces) S_.sortieT = 2.6; }
     sauver();
-    msg("Succès de presse ! +" + prime + " pièces", ouvre ? "Nouveau restaurant ouvert : " + ouvre + " (retour à la carte à la fin du service)" : (premier ? "Resto réussi !" : "Continue : la barre repart de la moitié."), "ok", 5);
+    msg("Succès de presse ! +" + prime + " pièces", ouvre ? "Nouveau restaurant ouvert : " + ouvre : (premier ? "Resto réussi !" : "Continue : la barre repart de la moitié."), "ok", 5);
   }
   function etoilesFin() { const part = S_.servis ? S_.parfaits / S_.servis : 0; return !S_.servis ? 0 : part >= BAL.etoiles[1] ? 3 : part >= BAL.etoiles[0] ? 2 : 1; }
   function finir() {                                              // fin de partie : bilan enregistré dans la campagne
@@ -516,6 +518,13 @@
     if (S_.ctx.libre) return;
     const r = G.camp.restos[S_.ctx.id];
     r.etoiles = Math.max(r.etoiles, etoilesFin()); r.meilleur = Math.max(r.meilleur, S_.score); sauver();
+  }
+  function terminerSurSucces() {                                   // 1re réussite d'un resto : bilan enregistré, puis écran de choix (ou carte pour le Palace)
+    const id = S_.ctx.id, suivant = id < RESTOS.length - 1 ? id + 1 : -1, facile = !modeDur();
+    S_.apresSucces = null; S_.sortieT = 0; finir();
+    G.suite = { id, suivant, facile };
+    if (suivant >= 0) { G.carteSel = suivant; G.resto = suivant; G.mode = "reussite"; } else { G.carteSel = id; G.mode = "carte"; }
+    sauver();
   }
   const nbEtoilesGuide = () => G.guide.filter((a) => a.id >= 1 && a.id <= 3).length;
 
@@ -856,6 +865,7 @@
     if (G.mode === "accueil") { G.tA += dt; if (G.sortie > 0) { G.sortie -= dt; if (G.sortie <= 0) { G.sortie = 0; G.mode = G.accueilSuite || "title"; } } return; }
     if (S_ && S_.article && G.mode === "play") { S_.article.t += dt; return; }        // l'article de presse fige le jeu
     if (G.mode !== "play") return;
+    if (S_ && S_.sortieT > 0) { S_.sortieT -= dt; if (S_.sortieT <= 0) { terminerSurSucces(); return; } }
     if (S_) S_.repuAff += (S_.repu - S_.repuAff) * Math.min(1, dt * 4);
     const s = S_, sv = s.serveur, rate = TEMPS_PAT[G.chrono];
 
@@ -1278,12 +1288,13 @@
   // Passe-plats (chantier 8B) : une image par resto (bois, crème, palace), rognée au-dessus du boîtier (on retire le câble de la lampe) et ajustée au même emplacement contre le mur.
   // sy = première ligne gardée ; ouv = ouverture et plat = point où se posent les assiettes, en pixels de l'image.
   const PASSES = [
-    { img: "passe_plats_bois", sy: 45, ouv: { x: 117, y: 135, w: 527, h: 340 }, plat: { x: 359, y: 492 } },
+    { img: "passe_plats_bois", bas: 292, hmax: 150, sy: 45, ouv: { x: 117, y: 135, w: 527, h: 340 }, plat: { x: 359, y: 492 } },
     { img: "passe_plats_creme", sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
     { img: "passe_plats_creme", sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
     { img: "passe_plats_palace", sy: 60, ouv: { x: 97, y: 145, w: 653, h: 420 }, plat: { x: 423, y: 586 } },
   ];
   let PASSE_F = 1;
+  const HATCH_DESSIN = { x: 0, y: 0, w: 0, h: 0 };          // là où le passe-plats est réellement dessiné (zone cliquable en plus de HATCH_RECT)
   ["passe_plats_bois", "passe_plats_creme", "passe_plats_palace"].forEach((n) => (LISTE[n] = "assets/salle/" + n + ".png"));
   function dessinerPasse() {                                     // passe-plats encastré : l'image du resto, recalée dans l'emplacement du mur
     const P = PASSES[restoRendu] || PASSES[0], nv = img(P.img);
@@ -1293,7 +1304,8 @@
       ctx.drawImage(im, 0, 0, im.width, h, HATCH.x, HATCH.y, im.width * HS, h * HS);
       return;
     }
-    const hs = nv.height - P.sy, sc = Math.min(320 / nv.width, 190 / hs), w = nv.width * sc, h = hs * sc, x0 = HATCH_RECT.x + HATCH_RECT.w / 2 - w / 2, y0 = HATCH.y + 182 - h;
+    const hs = nv.height - P.sy, sc = Math.min(320 / nv.width, (P.hmax || 190) / hs), w = nv.width * sc, h = hs * sc, x0 = HATCH_RECT.x + HATCH_RECT.w / 2 - w / 2, y0 = (P.bas || HATCH.y + 182) - h;      // bas = ligne du rebord (9B : au village il est remonté sur le mur)
+    HATCH_DESSIN.x = x0; HATCH_DESSIN.y = y0; HATCH_DESSIN.w = w; HATCH_DESSIN.h = h;
     ctx.drawImage(nv, 0, P.sy, nv.width, hs, x0, y0, w, h);
     Object.assign(HATCH_OUV, { x: x0 + P.ouv.x * sc, y: y0 + (P.ouv.y - P.sy) * sc, w: P.ouv.w * sc, h: P.ouv.h * sc });
     Object.assign(HATCH_PLATE, { x: Math.round(x0 + P.plat.x * sc), y: Math.round(y0 + (P.plat.y - P.sy) * sc) });
@@ -1354,7 +1366,7 @@
     const montee = c.state === "enter" && !A.calme ? Math.pow(1 - Math.min(1, c.t / 0.6), 3) * 60 : 0;      // il glisse jusqu'à sa chaise
     const resp = (A.calme ? 0 : Math.sin(G.t * 2 + c.bob) * 2) + montee;
     if (sprite) {
-      const sc = CLIENT_W * (CLIENT_ECH[c.slug] || (NOUVEAUX[c.slug] ? 1.2 : 1)) / (img(c.slug + "_attente") || sprite).width;
+      const sc = CLIENT_W * (CLIENT_ECH[c.slug] || (NOUVEAUX[c.slug] ? NOUVEAUX_ECH : 1)) / (img(c.slug + "_attente") || sprite).width;
       ctx.drawImage(sprite, x - sprite.width * sc / 2, y - sprite.height * sc + resp - (c.haut || 0) + (CLIENT_DY[c.slug] || 0), sprite.width * sc, sprite.height * sc);
     } else silhouetteClient(x, y + resp, c, appel);
     ctx.restore();
@@ -2425,6 +2437,30 @@
     else if (T.t > 1 && (k === "Enter" || k === " ")) lancerFinale();
   }
 
+  // ------------------------------------------------------------------ chantier 9B : écran après un resto réussi (resto suivant / refaire en difficile / carte)
+  function dessinerReussite() {
+    const su = G.suite; if (!su) { G.mode = "carte"; return; }
+    decorCarte(); ctx.fillStyle = "rgba(40,20,10,0.8)"; ctx.fillRect(0, 0, W, H);
+    const R = RESTOS[su.id], N = RESTOS[su.suivant];
+    texte("Resto réussi !", W / 2, 150, 96, "#f6e9cf", "center", "#5a3a29");
+    texte("« " + R.titre + " » a séduit le guide. Le resto suivant est ouvert :", W / 2, 245, 36, "#fff", "center", "#5a3a29", "normal");
+    vignetteResto(su.suivant, W / 2, 400, 110, false, false);
+    texte(N.titre + " — " + N.lieu, W / 2, 545, 40, "#f6e9cf", "center", "#5a3a29");
+    BTN.su = { suivant: bouton(W / 2 - 400, 600, 800, 100, "Aller au resto suivant (Entrée)", false, 38) };
+    if (su.facile) {
+      BTN.su.dur = bouton(W / 2 - 400, 725, 800, 100, "Refaire ce resto en difficile (D)", false, 36);
+      texte("En difficile : cuisine, pièces à gagner et objets de déco pour équiper ton resto.", W / 2, 855, 28, "#fff", "center", "#5a3a29", "normal");
+    }
+    BTN.su.carte = bouton(W / 2 - 400, su.facile ? 900 : 725, 800, 90, "Retour à la carte (Échap)", false, 32);
+  }
+  function actionReussite(a) {
+    const su = G.suite; if (!su) { G.mode = "carte"; return; }
+    if (a === "suivant") ouvrirResto(su.suivant);
+    else if (a === "dur" && su.facile) { G.difficile = 1; sauver(); ouvrirResto(su.id); }
+    else if (a === "carte") { G.mode = "carte"; sonClic(); }
+  }
+  function clicReussite(p) { const b = BTN.su || {}; if (dans(b.suivant, p)) actionReussite("suivant"); else if (dans(b.dur, p)) actionReussite("dur"); else if (dans(b.carte, p)) actionReussite("carte"); }
+
   // ------------------------------------------------------------------ la carte de la campagne (chantier 7b)
   function teinter(col) { ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = col; ctx.fillRect(0, 0, W, H); ctx.restore(); }
   const ouvrir = (mode) => { G.retourDe = G.mode; G.mode = mode; };
@@ -2807,6 +2843,7 @@
     if (G.mode === "accueil") { dessinerAccueil(); return; }
     if (G.mode === "carte") { dessinerCarte(); return; }
     if (G.mode === "finale") { dessinerFinale(); return; }
+    if (G.mode === "reussite") { dessinerReussite(); return; }
     if (G.mode === "franchises") { dessinerFranchises(); return; }
     if (G.mode === "atelier") { dessinerAtelier(); return; }
     const enCuisine = !!S_ && G.vue === "cuisine" && (G.mode === "play" || G.mode === "over");
@@ -2853,6 +2890,7 @@
     if (G.mode === "accueil") { actionAccueil(p); return; }
     if (G.mode === "carte") { clicCarte(p); return; }
     if (G.mode === "finale") { clicFinale(p); return; }
+    if (G.mode === "reussite") { clicReussite(p); return; }
     if (G.mode === "franchises") { clicFranchises(p); return; }
     if (G.mode === "atelier") { clicAtelier(p); return; }
     if (G.mode === "title") {
@@ -2905,7 +2943,7 @@
     for (let k = 0; k < S_.tickets.length; k++) {         // clic sur un ticket du rail : aller choisir l'assiette de cette commande
       if (dans(ticketRect(k), p)) { const t = S_.tickets[k], c = S_.tables[t.table].client; if (c && c.ticket === t.id && c.etape === "choix") demanderChoix(t.table); return; }
     }
-    if (dans(HATCH_RECT, p) && p.y < HATCH_RECT.y + HATCH_RECT.h + 30) { agirAuPasse(); return; }
+    if ((dans(HATCH_RECT, p) && p.y < HATCH_RECT.y + HATCH_RECT.h + 30) || dans(HATCH_DESSIN, p)) { agirAuPasse(); return; }
     for (const tb of S_.tables) {
       if (!tableActive(tb.i)) continue;
       if (Math.abs(p.x - tb.x) < 115 && p.y > 330 && p.y < 830) {
@@ -2928,7 +2966,7 @@
   cv.addEventListener("wheel", (e) => { if (G.mode === "atelier") { defilerAtelier(e.deltaY > 0 ? 1 : -1); e.preventDefault(); } }, { passive: false });
   cv.addEventListener("touchend", (e) => { if (glisse && glisse.bouge) { glisse = null; e.preventDefault(); return; } if (e.changedTouches[0]) { const p = pos(e.changedTouches[0]); G.mouse = p; clic(p); e.preventDefault(); } }, { passive: false });
   function annulerPanneau() { S_.panel = null; }
-  function fermerArticle() { S_.article = null; sonClic(); }
+  function fermerArticle() { S_.article = null; sonClic(); if (S_.apresSucces) terminerSurSucces(); }
   function ouvrirNom() {
     G.retourDe = G.mode; G.mode = "nom"; G.saisieNom = G.nom; const c = champ();
     if (c) { c.maxLength = 24; c.value = G.nom; c.focus(); c.select(); }
@@ -2963,6 +3001,7 @@
       else if (k === "n" || k === "N") { e.preventDefault(); ouvrirNom(); }
       return;
     }
+    if (G.mode === "reussite") { if (k === "Enter" || k === " ") { e.preventDefault(); actionReussite("suivant"); } else if (k === "d" || k === "D") actionReussite("dur"); else if (k === "Escape") actionReussite("carte"); return; }
     if (G.mode === "finale" || G.mode === "franchises") { toucheToque(e, k); return; }
     if (G.mode === "atelier") {
       const at = G.atelier, n = itemsAtelier().length;
@@ -3060,7 +3099,7 @@
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
     G, ACCU, RESTOS, SALLES, arriveeService, lassitude, PASSES, coteIndic, defilerAtelier, HATCH_OUV, HATCH_PLATE, carteGeo, mursDe, PAPIERS, NAPPES, OBJETS, TABLES, CHAISES, obstaclesSalle, satisfactionDeco, recolorer, tirerClient, nouveauClient, CASTING, placement, listeAtelier, tableChoisie, styleTable, rectPose, poseValide, tableValide, trouverPlace, trouverPlaceTable, decoPoses, dessinerPose, objetDe, nbExemplaires, nbPoses, enReserve, prixItem, TABLE_PLUS, TABLE_R, commencerPose, suivre, poserMain, annulerMain, rangerMain, tournerMain, placerPourMoi, prendreDansSalle, actionAtelier, ongletsAtelier, decoFacile, ptSalle, apercuRect, quitterAtelier, deplacerMain, triTables, SOL_BASE_MAX, TABLE_X_MIN, TABLE_X_MAX, TABLE_ECART, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
-    TEINTES, ouvrirAtelierEnJeu, synchroTablesJeu, BTN_DECO, lancerFinale, majFinale, repondreFinale, bilanFinale, EPREUVE_NB,
+    TEINTES, NOUVEAUX_ECH, terminerSurSucces, actionReussite, ouvrirAtelierEnJeu, synchroTablesJeu, BTN_DECO, lancerFinale, majFinale, repondreFinale, bilanFinale, EPREUVE_NB,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k] && !/^bg_(carte|tele|titre_\d|salle_\d)$/.test(k)); },
   };

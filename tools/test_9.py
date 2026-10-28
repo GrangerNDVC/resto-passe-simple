@@ -55,6 +55,28 @@ with sync_playwright() as p:
     ev("__jeu.G.libre = true; __jeu.start(); __jeu.rendre()")
     pg.keyboard.press("d")
     check("entraînement libre : pas d'atelier en jeu", ev("__jeu.G.mode") == "play")
+    # --- chantier 9B : resto réussi -> écran de choix, retour à la carte
+    def reussir(facile, resto=0):
+        ev(f"__jeu.G.difficile={0 if facile else 1}; __jeu.G.libre=false; __jeu.G.resto={resto}; __jeu.G.camp = __jeu.campVide(); __jeu.G.guide = [{{id: 0, v: ['a','b','c'], nom: 'x'}}]; __jeu.start()")
+        ev("__jeu.S.servis = 8; __jeu.S.vus = []; __jeu.S.repu = 100; __jeu.verifierGuide()")
+    reussir(True)
+    check("réussite : l'article s'affiche d'abord", ev("!!__jeu.S.article") and ev("__jeu.G.mode") == "play")
+    ev("__jeu.fermerArticle()")
+    check("article fermé : écran de choix (on ne reste pas dans le resto 1)", ev("__jeu.G.mode") == "reussite" and ev("__jeu.G.suite.suivant") == 1 and ev("__jeu.G.camp.restos[1].ouvert") is True)
+    ev("__jeu.rendre()"); pg.screenshot(path=out + "/9_reussite_facile.png")
+    check("en facile : le choix « refaire en difficile » est proposé", ev("__jeu.G.suite.facile") is True)
+    ev("__jeu.actionReussite('dur')")
+    check("« refaire en difficile » : mode difficile, on revient au resto 1 (accueil)", ev("__jeu.G.difficile") == 1 and ev("__jeu.G.resto") == 0 and ev("__jeu.G.mode") == "accueil")
+    reussir(False); ev("__jeu.fermerArticle()")
+    check("en difficile : pas de choix « refaire », resto suivant proposé", ev("__jeu.G.mode") == "reussite" and ev("__jeu.G.suite.facile") is False)
+    ev("__jeu.actionReussite('suivant')")
+    check("« resto suivant » : on entre au resto 2", ev("__jeu.G.resto") == 1 and ev("__jeu.G.mode") == "accueil")
+    reussir(True); ev("__jeu.G.guide = [0,1,2,3].map(id => ({id, v: ['a','b','c'], nom: 'x'})); __jeu.S.article = null; __jeu.S.apresSucces = 'choix'; __jeu.S.sortieT = 0.1; __jeu.avancer(0.5)")
+    check("sans nouvel article : le retour se fait tout seul après un instant", ev("__jeu.G.mode") == "reussite")
+    ev("__jeu.actionReussite('carte')")
+    check("« retour à la carte »", ev("__jeu.G.mode") == "carte" and ev("__jeu.G.carteSel") == 1)
+    # --- tailles des clients
+    ev("__jeu.G.camp = __jeu.campVide(); __jeu.G.resto = 3; __jeu.G.libre = false; __jeu.G.difficile = 0; __jeu.start()")
     check("aucune erreur JavaScript", not errs, str(errs[:3]))
     b.close()
 bad = [n for n, ok in checks if not ok]

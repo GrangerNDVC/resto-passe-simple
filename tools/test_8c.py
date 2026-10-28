@@ -40,11 +40,11 @@ with sync_playwright() as p:
         pp.append(ev("({o: {...__jeu.HATCH_OUV}, p: {...__jeu.HATCH_PLATE}, r: {...__jeu.HATCH_RECT}})"))
     ok = all(q["p"]["y"] >= q["o"]["y"] + q["o"]["h"] - 6 and q["p"]["y"] <= q["r"]["y"] + q["r"]["h"] and q["o"]["x"] < q["p"]["x"] < q["o"]["x"] + q["o"]["w"] for q in pp)
     check("passe-plats des 4 restos : les assiettes sont posées sur le rebord (bas de l'ouverture), au milieu du passe-plats", ok, str([(round(q["p"]["y"]), round(q["o"]["y"] + q["o"]["h"]), round(q["r"]["y"] + q["r"]["h"])) for q in pp]))
-    # clients : 10 % plus petits face au serveur
+    # clients : taille (180 au 8C, 190 depuis le 9B)
     ev("""window.__w = {}; const o = CanvasRenderingContext2D.prototype.drawImage; CanvasRenderingContext2D.prototype.drawImage = function(i, a, b, c, d){ if(i && i.src && /client_04_blonde_attente/.test(i.src) && arguments.length === 5) window.__w.blonde = c; return o.apply(this, arguments); };
-          __jeu.G.resto=0; __jeu.start(); __jeu.S.tables.forEach(t=>t.client=null); const t=__jeu.S.tables[2]; __jeu.nouveauClient(t); t.client.slug='client_04_blonde'; t.client.recol=null; t.client.state='wait'; t.client.t=0; __jeu.rendre()""")
-    wb = ev("window.__w.blonde"); check("clients : 10 % plus petits (la blonde mesure 153 px au lieu de 170)", wb is not None and abs(wb - 153) < 2, str(wb))
-    sp = ev("""(()=>{ const res=[]; for(let i=0;i<4;i++){ __jeu.G.resto=i; __jeu.G.libre=false; __jeu.G.chrono='sans'; __jeu.start(); const S=__jeu.S; const sl=['client_03_bouclee','client_08_afro','client_01_garcon','client_09_tresses','client_06_moustachu','client_10_costume'];
+          __jeu.G.camp.restos[0].deco.tables = [330,630,930,1230].map(x => ({x, style: '', nappes: 'origine'})); __jeu.G.resto=0; __jeu.start(); __jeu.S.tables.forEach(t=>t.client=null); const t=__jeu.S.tables[2]; __jeu.nouveauClient(t); t.client.slug='client_04_blonde'; t.client.recol=null; t.client.state='wait'; t.client.t=0; __jeu.rendre()""")
+    wb = ev("window.__w.blonde"); check("clients : CLIENT_W 190 (chantier 9B ; la blonde mesure 161,5 px)", wb is not None and abs(wb - 161.5) < 2, str(wb))
+    sp = ev("""(()=>{ const res=[]; for(let i=0;i<4;i++){ __jeu.G.camp.restos[i].deco.tables = [330,630,930,1230,1530,1780].slice(0, __jeu.RESTOS[i].tablesMax).map(x => ({x, style: '', nappes: 'origine'})); __jeu.G.resto=i; __jeu.G.libre=false; __jeu.G.chrono='sans'; __jeu.start(); const S=__jeu.S; const sl=['client_03_bouclee','client_08_afro','client_01_garcon','client_09_tresses','client_06_moustachu','client_10_costume'];
         S.tables.forEach((t,k)=>{ t.client=null; __jeu.nouveauClient(t); t.client.slug=sl[k]; t.client.state='call'; });
         const att=S.tables.filter(t=>t.client).sort((a,b)=>a.x-b.x); const spans=att.map(t=>{ const c=__jeu.coteIndic(t); return c>0?[t.x+68,t.x+210]:[t.x-210,t.x-68]; });
         let chev=0; for(let a=0;a<spans.length;a++) for(let c=a+1;c<spans.length;c++) if(spans[a][1]>spans[c][0]&&spans[c][1]>spans[a][0]) chev++; res.push(chev);} return res; })()""")
@@ -84,8 +84,8 @@ with sync_playwright() as p:
     cc = ev("""(()=>{ __jeu.G.camp.argent=99999; __jeu.G.camp.restos.forEach(r=>r.ouvert=true); const res={}; __jeu.G.camp.restos[3].deco=__jeu.decoLire({}); __jeu.ouvrirAtelier(); __jeu.changerRestoAtelier(3);
         __jeu.acheterOuChoisir('papier','rose'); res.couleur=__jeu.G.camp.restos[3].deco.charme; __jeu.G.camp.restos[3].deco.charme=0;
         __jeu.acheterOuChoisir('table','frange_bougies'); res.table=__jeu.G.camp.restos[3].deco.charme; __jeu.G.camp.restos[3].deco.charme=0;
-        __jeu.acheterOuChoisir('objet','statue_zeus'); res.objet=__jeu.G.camp.restos[3].deco.charme; __jeu.G.camp.restos[3].deco.charme=0;
-        const sat0=__jeu.satisfactionDeco(3); __jeu.acheterOuChoisir('objet','plante'); res.ancien=__jeu.G.camp.restos[3].deco.charme; res.sat1=__jeu.satisfactionDeco(3)-sat0;
+        __jeu.acheterOuChoisir('objet','statue_zeus'); res.objet=__jeu.G.camp.restos[3].deco.charme; __jeu.poserMain(); res.objet0=__jeu.G.camp.restos[3].deco.charme; __jeu.G.camp.restos[3].deco.charme=0;
+        const sat0=__jeu.satisfactionDeco(3); __jeu.acheterOuChoisir('objet','plante'); __jeu.poserMain(); res.ancien=__jeu.G.camp.restos[3].deco.charme; res.sat1=__jeu.satisfactionDeco(3)-sat0;
         res.l=[__jeu.lassitude({resto:3},3), __jeu.lassitude({resto:2},3), __jeu.lassitude({resto:0},3)]; return res; })()""")
     check("changement de couleur : 4 clients charmés (BAL.decoClientsCouleur) ; table et objet : 12", cc["couleur"] == ev("__jeu.BAL.decoClientsCouleur") == 4 and cc["table"] == 12 and cc["objet"] == 12, str(cc))
     check("lassitude : un objet d'un resto plus modeste charme moins de clients et pèse moins dans la satisfaction (BAL.lassitudeAncien / lassitudeMin)", cc["ancien"] == round(12 * 0.2) and abs(cc["l"][0] - 1) < 1e-9 and abs(cc["l"][1] - 0.65) < 1e-9 and abs(cc["l"][2] - 0.2) < 1e-9, str(cc))
