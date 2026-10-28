@@ -531,16 +531,19 @@
     const id = S_ && S_.ctx && S_.ctx.id >= 0 ? S_.ctx.id : 0, C = CASTING[Math.min(3, id)], pool = [];
     CLIENTS.slice(0, 6).forEach((c) => pool.push([c, C.vieux]));
     Object.keys(NOUVEAUX).forEach((c) => { if (C[NOUVEAUX[c]] && img(c + "_attente")) pool.push([c, C[NOUVEAUX[c]]]); });
-    const libres = pool.filter((q) => !pris.includes(q[0])), tot = libres.reduce((a, q) => a + q[1], 0);
+    // chantier 9 : un même personnage (même avec d'autres couleurs) ne revient pas avant quelques clients : on écarte les derniers venus (autant que la réserve le permet)
+    const k = Math.min(5, Math.max(0, pool.length - 3)), recents = ((S_ && S_.recents) || []).slice(-k);
+    let libres = pool.filter((q) => !pris.includes(q[0]) && !recents.includes(q[0])); if (!libres.length) libres = pool.filter((q) => !pris.includes(q[0]));
+    const tot = libres.reduce((a, q) => a + q[1], 0);
     let r = rnd() * tot; for (const q of libres) { r -= q[1]; if (r <= 0) return q[0]; }
     return libres.length ? libres[0][0] : CLIENTS[0];
   }
   // Recoloration des nouveaux clients : la planche <slug>_calques.png a 4 rangées (repères, peau, cheveux, vêtement) × 2 colonnes (attente, appel), de la taille du client
   const TEINTES = {
     skin: ["#f1c9a5", "#e8b48a", "#d09a6c", "#b9805a", "#9a6743", "#7b4a2e"],
-    hair: ["#2a1d17", "#5a3a29", "#8a5a2b", "#b8893a", "#a24a2b", "#8e8e8e"],
+    hair: ["#2a1d17", "#5a3a29", "#8a5a2b", "#b8893a", "#a24a2b", "#7a3b2e"],      // 9 : plus aucun gris (même un gris moyen faisait un effet bizarre)
     // 8C : pas de gris clair ni de blond pâle — la recoloration éclaircit aussi les contours et les yeux (voir CHANTIER8C.md)
-    shirt: ["#d9473b", "#2f6a8f", "#4c8c4a", "#e8b33f", "#7b4b94", "#c76b8f", "#2f2f3a", "#f0e6d2", "#e8833a"],
+    shirt: ["#d9473b", "#2f6a8f", "#4c8c4a", "#e8b33f", "#7b4b94", "#c76b8f", "#8a2f4a", "#f0e6d2", "#e8833a"],
   };
   const TEINTE_REF = { skin: 0.7, hair: 0.3, shirt: 0.4 };               // luminosité des aplats d'origine de chaque calque (mesurée sur les 11 clients, chantier 8C)
   const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
@@ -586,7 +589,8 @@
     const pris = S_.tables.map((t) => t.client && t.client.slug).filter(Boolean);       // deux tables ne montrent jamais le même personnage
     const slug = vip && !pris.includes(CLIENTS[6]) ? CLIENTS[6] : tirerClient(pris);
     vip = slug === CLIENTS[6];
-    const looks = { skin: ["#f1c9a5", "#d9a47a", "#a9714c", "#f6d5b5"], shirt: ["#e8b33f", "#4c8c4a", "#d9473b", "#e8833a", "#7b4b94", "#c76b8f"], hair: ["#5a3a29", "#2e2420", "#b8893a", "#9a9a9a", "#a24a2b"] };
+    (S_.recents = S_.recents || []).push(slug); if (S_.recents.length > 8) S_.recents.shift();
+    const looks = { skin: ["#f1c9a5", "#d9a47a", "#a9714c", "#f6d5b5"], shirt: ["#e8b33f", "#4c8c4a", "#d9473b", "#e8833a", "#7b4b94", "#c76b8f"], hair: ["#5a3a29", "#2e2420", "#b8893a", "#7a3b2e", "#a24a2b"] };
     const pick = (a) => a[Math.floor(rnd() * a.length)];
     let patSec = Math.max(BAL.patMin, BAL.patBase - BAL.patPas * rythme()) * (vip ? 0.8 : 1), charme = false;
     const rid = S_.ctx.id;
@@ -1897,6 +1901,7 @@
 
   // ------------------------------------------------------------------ interface
   const BTN_PAUSE = { x: W - 214, y: 20, w: 184, h: 56 };
+  const BTN_DECO = { x: W - 214, y: 84, w: 184, h: 56 };          // chantier 9 : atelier déco en plein service (le jeu s'arrête le temps qu'on le fait)
   const BTN_REPRENDRE = { x: W / 2 - 330, y: H / 2 + 10, w: 660, h: 100 };
   function barreRepu(x, y, w, h) {                  // jauge de réputation : rouge → vert, avec l'étoile du succès de presse au bout
     const v = Math.max(0, Math.min(100, S_.repuAff)) / 100, col = v < 0.2 ? "#d9473b" : v < 0.45 ? "#e8833a" : v < 0.75 ? "#e8b33f" : "#6cb04a";
@@ -1923,6 +1928,12 @@
       ctx.fillStyle = sur ? "#e8b33f" : "rgba(246,233,207,0.94)"; rr(b.x, b.y, b.w, b.h, 16); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
       ctx.fillStyle = "#5a3a29"; ctx.fillRect(b.x + 22, b.y + 16, 8, 24); ctx.fillRect(b.x + 36, b.y + 16, 8, 24);
       texte("Pause (P)", b.x + 62, b.y + b.h / 2 + 1, 24, "#4a2f22", "left");
+    }
+    if (G.mode === "play" && !G.libre) {                             // dépenser ses pièces n'importe quand
+      const b = BTN_DECO, sur = dans(b, G.mouse);
+      ctx.fillStyle = sur ? "#e8b33f" : "rgba(246,233,207,0.94)"; rr(b.x, b.y, b.w, b.h, 16); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
+      texte("Déco (D)", b.x + b.w / 2, b.y + b.h / 2 + 1, 24, "#4a2f22");
+      dessiner("fx_piece", b.x + 6, b.y + 62, 0.08, 0.08, "haut"); texte(G.camp.argent + " pièces", b.x + b.w - 6, b.y + 84, 24, "#fff", "right", "#5a3a29");
     }
     texte((G.vue === "salle" ? "← → : marcher   Espace : agir   " : "") + "P : pause   M : son" + (S_.cuis.ouverte ? (G.vue === "cuisine" ? "   C : salle" : "   C : cuisine") : ""), W - 30, H - 22, 22, "rgba(255,255,255,0.8)", "right", "rgba(60,30,20,0.7)", "normal");
   }
@@ -2656,7 +2667,17 @@
     if (G.atelier.main) annulerMain();
     G.atelier.resto = i; G.atelier.sel = 0; G.atelier.top = 0; G.atelier.tsel = -1; sonClic();
   }
-  function quitterAtelier() { if (G.atelier.main) annulerMain(); G.mode = G.retourDe && G.retourDe !== "atelier" ? G.retourDe : "carte"; sonClic(); }
+  function ouvrirAtelierEnJeu() {                                  // le service est suspendu (update ne tourne qu'en mode « play ») ; l'atelier s'ouvre sur le resto en cours
+    G.keys.gauche = false; G.keys.droite = false; ouvrirAtelier(); if (S_ && S_.ctx.id >= 0) G.atelier.resto = S_.ctx.id;
+  }
+  function synchroTablesJeu() {                                    // au retour dans le service : les tables posées / recolorées à l'atelier sont reprises (les clients restent à leur place dans la file des tables)
+    if (!S_ || S_.ctx.libre || !S_.tablesFixes) return;
+    const tn = triTables(G.camp.restos[S_.ctx.id].deco.tables.map((t) => ({ x: t.x, style: t.style, nappes: t.nappes })));
+    tn.forEach((t, i) => { if (S_.tables[i]) Object.assign(S_.tables[i], { x: t.x, style: t.style, nappes: t.nappes }); else S_.tables.push({ i, x: t.x, style: t.style, nappes: t.nappes, client: null, plat: null, platT: 0 }); });
+    while (S_.tables.length > tn.length && !S_.tables[S_.tables.length - 1].client) S_.tables.pop();
+    S_.serveur.path = []; S_.serveur.task = null;
+  }
+  function quitterAtelier() { if (G.atelier.main) annulerMain(); const retour = G.retourDe && G.retourDe !== "atelier" ? G.retourDe : "carte"; G.mode = retour; if (retour === "play") synchroTablesJeu(); sonClic(); }
   function dessinerSalleApercu(i, d, x0, y0, w, surSalle) {       // la salle du resto i en miniature avec la déco d (tables vides) ; surSalle() dessine par-dessus (objet tenu, table choisie)
     const k = w / W, R = RESTOS[i], bgk = img(R.salle) ? R.salle : "bg_salle", avant = decoRendu, avantR = restoRendu; restoRendu = i;
     ctx.save(); ctx.translate(x0, y0); ctx.scale(k, k); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
@@ -2869,6 +2890,7 @@
     if (G.paused) { G.paused = false; sonClic(); return; }                   // n'importe quel clic reprend la partie
     if (G.trans) return;
     if (dans(BTN_PAUSE, p)) { G.paused = true; return; }
+    if (!G.libre && dans(BTN_DECO, p)) { ouvrirAtelierEnJeu(); return; }
     if (G.vue === "cuisine") { clicCuisine(p); return; }
     if (S_.dial) { avancerDialogue(); return; }
     if (S_.panel) {
@@ -2973,6 +2995,7 @@
     if (k === "ArrowLeft") G.keys.gauche = true;
     if (k === "ArrowRight") G.keys.droite = true;
     if (k === "p" || k === "P") { if (G.mode === "play") G.paused = !G.paused; return; }
+    if ((k === "d" || k === "D") && G.mode === "play" && S_ && !G.libre && !G.paused && !S_.article) { ouvrirAtelierEnJeu(); return; }
     if (k === "m" || k === "M") { G.muted = !G.muted; return; }
     if (G.mode === "title") {
       if (k === "Enter" || k === " ") { e.preventDefault(); nouvellePartie(); sonClic(); }
@@ -3037,7 +3060,7 @@
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
     G, ACCU, RESTOS, SALLES, arriveeService, lassitude, PASSES, coteIndic, defilerAtelier, HATCH_OUV, HATCH_PLATE, carteGeo, mursDe, PAPIERS, NAPPES, OBJETS, TABLES, CHAISES, obstaclesSalle, satisfactionDeco, recolorer, tirerClient, nouveauClient, CASTING, placement, listeAtelier, tableChoisie, styleTable, rectPose, poseValide, tableValide, trouverPlace, trouverPlaceTable, decoPoses, dessinerPose, objetDe, nbExemplaires, nbPoses, enReserve, prixItem, TABLE_PLUS, TABLE_R, commencerPose, suivre, poserMain, annulerMain, rangerMain, tournerMain, placerPourMoi, prendreDansSalle, actionAtelier, ongletsAtelier, decoFacile, ptSalle, apercuRect, quitterAtelier, deplacerMain, triTables, SOL_BASE_MAX, TABLE_X_MIN, TABLE_X_MAX, TABLE_ECART, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
-    lancerFinale, majFinale, repondreFinale, bilanFinale, EPREUVE_NB,
+    TEINTES, ouvrirAtelierEnJeu, synchroTablesJeu, BTN_DECO, lancerFinale, majFinale, repondreFinale, bilanFinale, EPREUVE_NB,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
     manquants() { return Object.keys(LISTE).filter((k) => !IMG[k] && !/^bg_(carte|tele|titre_\d|salle_\d)$/.test(k)); },
   };
