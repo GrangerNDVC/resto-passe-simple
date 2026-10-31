@@ -2,21 +2,60 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2b1a12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Le Resto du Passé Simple</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #2b1a12; overflow: hidden; }
-  body { display: flex; align-items: center; justify-content: center; }
-  canvas { width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); display: block; background: #000;
-           image-rendering: auto; touch-action: manipulation; cursor: default; }
+  /* Chantier 8A : le canvas 1920×1080 est toujours entièrement visible (« contain »), sur la hauteur dynamique du téléphone (dvh : sans la barre d'adresse),
+     en respectant les zones de sécurité (encoche, coins arrondis, barre de gestes). */
+  :root { --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px); --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px); --vh: 1vh; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #2b1a12; overflow: hidden; overscroll-behavior: none; }
+  body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  #cadre { position: absolute; left: var(--sa-l); top: var(--sa-t); right: var(--sa-r);
+           height: calc(100 * var(--vh) - var(--sa-t) - var(--sa-b));
+           display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  @supports (height: 100dvh) { #cadre { height: calc(100dvh - var(--sa-t) - var(--sa-b)); } }
+  /* largeur = min(largeur disponible, hauteur disponible × 16/9) : le rapport 16:9 est toujours respecté, rien n'est coupé */
+  canvas { display: block; background: #000; image-rendering: auto; touch-action: manipulation; cursor: default;
+           width: min(100%, calc((100 * var(--vh) - var(--sa-t) - var(--sa-b)) * 16 / 9)); height: auto; aspect-ratio: 16 / 9; max-height: 100%; }
+  @supports (height: 100dvh) { canvas { width: min(100%, calc((100dvh - var(--sa-t) - var(--sa-b)) * 16 / 9)); } }
+  #tourne { display: none; position: absolute; left: 0; right: 0; top: 6%; text-align: center; color: #f6e9cf; font: 600 18px/1.3 system-ui, sans-serif; padding: 0 20px; pointer-events: none; }
+  @media (orientation: portrait) and (max-width: 700px) { #tourne { display: block; } }
 </style>
 </head>
 <body>
+<div id="tourne">↻ Tourne ton téléphone en mode paysage pour jouer en grand.</div>
+<div id="cadre">
 <canvas id="c" width="1920" height="1080" aria-label="Jeu de restaurant : conjugue au passé simple pour servir les clients"></canvas>
+</div>
 <input id="saisie" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="20" aria-label="Écris la forme conjuguée" style="position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px;pointer-events:none">
+<script>
+/* Smartphone : (1) --vh suit la hauteur réellement visible (les navigateurs mobiles la changent quand la barre d'adresse se replie) ;
+   (2) plein écran au premier toucher (si le navigateur l'autorise ; sinon on ne fait rien). */
+(function () {
+  function vh() { var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight; document.documentElement.style.setProperty("--vh", (h / 100) + "px"); }
+  vh(); window.addEventListener("resize", vh); window.addEventListener("orientationchange", function () { setTimeout(vh, 250); });
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", vh);
+  var fait = false;
+  function plein() {
+    if (fait) return; fait = true;
+    try {
+      var d = document.documentElement, rq = d.requestFullscreen || d.webkitRequestFullscreen;
+      if (rq && !document.fullscreenElement && !document.webkitFullscreenElement && (window.matchMedia("(pointer: coarse)").matches)) {
+        var p = rq.call(d, { navigationUI: "hide" });
+        if (p && p.then) p.then(function () { try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {}); } catch (e) {} }).catch(function () {});
+      }
+    } catch (e) { /* tant pis : le jeu reste jouable sans plein écran */ }
+  }
+  window.addEventListener("touchend", plein, { once: true, passive: true });
+})();
+</script>
 <script src="js/geometrie.js"></script>
 <script src="js/verbes.js"></script>
 <script src="js/presse.js"></script>
-<script src="js/game.js"></script>
+<script src="js/game.js?v=20261031-08"></script>
+<script src="js/compte.js?v=20261031-08"></script>
 </body>
 </html>
