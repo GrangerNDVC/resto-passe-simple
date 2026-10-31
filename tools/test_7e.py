@@ -58,7 +58,7 @@ with sync_playwright() as p:
     # --- sauvegarde
     ev("__jeu.sauver()")
     sv = ev("JSON.parse(localStorage.getItem(__jeu.CLE))")
-    check("sauvegarde : version 2 + franchise", sv.get("version") == 2 and sv["camp"]["franchise"]["etoiles"] == 3)
+    check("sauvegarde : version 3 + franchise", sv.get("version") == 3 and sv["camp"]["franchise"]["etoiles"] == 3)
     ev("__jeu.G.camp = __jeu.campLire(JSON.parse(localStorage.getItem(__jeu.CLE)).camp)")
     check("rechargement : la franchise est relue", ev("__jeu.G.camp.franchise.etoiles") == 3 and ev("__jeu.G.camp.franchise.essais") == 2)
     check("ancienne sauvegarde (sans franchise) acceptée", ev("(() => { const o = JSON.parse(localStorage.getItem(__jeu.CLE)).camp; delete o.franchise; return __jeu.campLire(o).franchise.etoiles; })()") == 0)
