@@ -33,10 +33,10 @@ with sync_playwright() as p:
         w = ev("""(()=>{ const P=__jeu.placement(1,['objet:rideaux']), F=__jeu.SALLES[1].fenetres; return P.liste.map(p=>F.some(f=>p.x+p.w/2>f[0]&&p.x+p.w/2<f[1]&&p.y<=f[2]&&p.y+p.h>=f[3]-30)); })()""")
         check("rideaux : un par fenêtre, centrés sur une vraie fenêtre (jamais accrochés dans le vide)", len(w) == 2 and all(w), str(w))
     else: ignore("rideaux sur les fenêtres", "image deco_rideaux absente")
-    # passe-plats : les assiettes posées sur le rebord, dans l'ouverture et le cadre
+    # passe-plats (mode facile ; en mode difficile la grande porte le remplace, chantier 12) : les assiettes posées sur le rebord, dans l'ouverture et le cadre
     pp = []
     for i in range(4):
-        ev(f"""__jeu.G.camp.restos.forEach(r=>r.ouvert=true); __jeu.G.difficile=1; __jeu.G.cuisine=0; __jeu.G.libre=false; __jeu.G.resto={i}; __jeu.G.chrono='sans'; __jeu.start(); __jeu.avancer(2); __jeu.rendre()""")
+        ev(f"""__jeu.G.camp.restos.forEach(r=>r.ouvert=true); __jeu.G.difficile=0; __jeu.G.cuisine=0; __jeu.G.libre=false; __jeu.G.resto={i}; __jeu.G.chrono='sans'; __jeu.start(); __jeu.avancer(2); __jeu.rendre()""")
         pp.append(ev("({o: {...__jeu.HATCH_OUV}, p: {...__jeu.HATCH_PLATE}, r: {...__jeu.HATCH_RECT}})"))
     ok = all(q["p"]["y"] >= q["o"]["y"] + q["o"]["h"] - 6 and q["p"]["y"] <= q["r"]["y"] + q["r"]["h"] and q["o"]["x"] < q["p"]["x"] < q["o"]["x"] + q["o"]["w"] for q in pp)
     check("passe-plats des 4 restos : les assiettes sont posées sur le rebord (bas de l'ouverture), au milieu du passe-plats", ok, str([(round(q["p"]["y"]), round(q["o"]["y"] + q["o"]["h"]), round(q["r"]["y"] + q["r"]["h"])) for q in pp]))

@@ -33,12 +33,12 @@ with sync_playwright() as p:
     check("chaque objet trouve une place dans son resto", not seul, str(seul))
     res = ev("""(()=>{const out=[]; const touche=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
       for(let i=0;i<4;i++){ const ids=__jeu.OBJETS.filter(o=>o.resto===i).map(o=>'objet:'+o.id); const P=__jeu.placement(i,ids); const obs=__jeu.obstaclesSalle(i); let bad=0, pair=0, n=0;
-        P.liste.forEach(p=>{ if(p.o.zone!=='tapis'&&p.o.zone!=='coin'&&p.o.zone!=='fenetre'&&obs.some(q=>touche(p,q)&&!(q.table&&p.o.zone==='sol'))) bad++;          // un meuble peut être en partie caché par une table (PART_TABLE_MAX)
+        P.liste.forEach(p=>{ if(p.o.zone!=='tapis'&&p.o.zone!=='coin'&&p.o.zone!=='fenetre'&&obs.some(q=>touche(p,q)&&!(q.table&&p.o.zone==='sol')&&!(q.fen&&p.o.zone==='sol'))) bad++;          // un meuble peut être en partie caché par une table (PART_TABLE_MAX)
         n++; });
         const L=P.liste.filter(p=>p.o.zone!=='tapis'&&p.o.zone!=='fenetre'); for(let a=0;a<L.length;a++) for(let c=a+1;c<L.length;c++) if(touche(L[a],L[c])) pair++;
         const T=P.liste.filter(p=>p.o.zone==='tapis'); for(let a=0;a<T.length;a++) for(let c=a+1;c<T.length;c++) if(touche(T[a],T[c])) pair++;
         out.push({i,n,bad,pair,rates:P.rates.length}); } return out;})()""")
-    check("tout acheté : aucun objet sur les tables, le passe-plats, la porte, le rail, les fenêtres ni l'affichage, ni sur un autre objet", all(r["bad"] == 0 and r["pair"] == 0 and r["n"] > 5 for r in res), str(res))
+    check("tout acheté : aucun objet sur les tables, la porte, le rail, les fenêtres (sauf un meuble au sol, permis devant une fenêtre) ni l'affichage, ni sur un autre objet", all(r["bad"] == 0 and r["pair"] == 0 and r["n"] > 5 for r in res), str(res))
     # ---- objet refusé s'il n'y a plus de place
     ev("""__jeu.G.camp.argent = 99999; __jeu.G.camp.restos[3].deco = __jeu.decoLire({}); __jeu.ouvrirAtelier(); __jeu.changerRestoAtelier(3);
           __jeu.G.camp.restos.forEach(r=>r.ouvert=true); __jeu.changerRestoAtelier(3);
@@ -83,8 +83,9 @@ with sync_playwright() as p:
     ch = ev("__jeu.G.camp.restos[1].deco.charme"); check("achat d'un objet : les clients suivants sont charmés", ch == ev("__jeu.BAL.decoClients"), str(ch))
     ev("__jeu.G.camp.restos[1].deco.papier='rose'; __jeu.G.resto=1; __jeu.G.libre=false; __jeu.G.chrono='sans'; __jeu.start()")
     ev("__jeu.S.tables.forEach(t=>t.client=null); __jeu.G.camp.restos[1].deco.charme=2")
-    r = ev("""(()=>{const S=__jeu.S; const base=__jeu.BAL.patBase; let pats=[]; for(let k=0;k<2;k++){ S.tables.forEach(t=>t.client=null); __jeu.nouveauClient(S.tables[0]); pats.push([S.tables[0].client.patSec, S.tables[0].client.charme]); }
-       S.tables.forEach(t=>t.client=null); __jeu.nouveauClient(S.tables[0]); pats.push([S.tables[0].client.patSec, S.tables[0].client.charme]); return pats;})()""")
+    ev("__jeu.BAL.snobPart = [0, 0, 0, 0]")          # un client snob tiré au hasard changerait la patience mesurée
+    r = ev("""(()=>{const S=__jeu.S; const base=__jeu.BAL.patBase; let pats=[]; for(let k=0;k<2;k++){ S.tables.forEach(t=>t.client=null); __jeu.nouveauClient(S.tables[0]); pats.push([S.tables[0].client.patSec / (S.tables[0].client.vip ? 0.8 : 1), S.tables[0].client.charme]); }
+       S.tables.forEach(t=>t.client=null); __jeu.nouveauClient(S.tables[0]); pats.push([S.tables[0].client.patSec / (S.tables[0].client.vip ? 0.8 : 1), S.tables[0].client.charme]); return pats;})()""")
     check("clients charmés : patience plus longue, N décroît, ensuite plus de bonus", r[0][1] and r[1][1] and not r[2][1] and r[0][0] > r[2][0] * 1.02 and ev("__jeu.G.camp.restos[1].deco.charme") == 0, str(r))
     ev("__jeu.G.camp.restos[1].deco.charme=3; __jeu.G.difficile=0; __jeu.S.tables.forEach(t=>t.client=null); __jeu.nouveauClient(__jeu.S.tables[0])")
     check("mode facile : aucun bonus de décor", not ev("__jeu.S.tables[0].client.charme"))

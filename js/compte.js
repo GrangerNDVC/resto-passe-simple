@@ -41,7 +41,7 @@
   };
   var SDK = "https://www.gstatic.com/firebasejs/8.10.1/";
   var CHEMIN = "jeux/resto-passe-simple";
-  var VERSION_TEXTE = "Version du 31/10, 22 h";                // mise à jour à chaque livraison (voir aussi les ?v= dans index.html)
+  var VERSION_TEXTE = "Version du 01/11, 19 h";                // mise à jour à chaque livraison (voir aussi les ?v= dans index.html)
   /* Mot de passe de secours : seule l'empreinte SHA-256 salée est dans le fichier (jamais le mot de passe). */
   var SEL = "resto-passe-simple|v1|Qm7x2";
   var EMPREINTE_SECOURS = "08bbf135c113cdc9fd7d50e6439f272e2680965d6ba3cda495ab106c77e1dc6a";

@@ -128,7 +128,7 @@
     // Cuisine (chantier 4) — réglages de départ, à ajuster après les essais en classe
     cuisineApres: 10,                          // la cuisine s'ouvre après N clients servis d'affilée (aucun client parti fâché entre-temps)
     cuisineProba: 0.6,                         // part des commandes à cuisiner une fois la cuisine ouverte (les autres restent des QCM en salle)
-    cuisinePatMul: 1.5,                        // ces clients patientent plus longtemps (aller-retour par la porte, saisie, cuisson)
+    cuisinePatMul: 2.3,                        // ces clients patientent plus longtemps (aller-retour par la porte, saisie, cuisson)
     cuisinePlus: [60, 50, 40, 30],             // chantier 8A : + secondes de patience pour écrire la forme en cuisine (une minute au resto 1, dégressif ensuite)
     cuisson: [3.2, 4.2, 5.2],                  // temps de cuisson (s) : marmite, plan de travail, plaque
     rateDuree: 3,                              // temps pendant lequel un poste reste bloqué après un plat raté
@@ -302,6 +302,10 @@
   const nbPoses = (d, id) => (d.poses || []).filter((p) => p.id === id).length;
   const enReserve = (d, id) => nbExemplaires(d, id) - nbPoses(d, id);
   const triTables = (l) => l.sort((a, b) => a.x - b.x);
+  // (fonctions « function » : elles servent à la lecture de la sauvegarde, très tôt au chargement)
+  function recolorable(o) { return !!o && (o.zone === "sol" || o.zone === "coin") && (/^desserte/.test(o.id) || /^plante/.test(o.id) || /^statue_/.test(o.id)); }
+  function couleurOk(id) { return ["rouge", "bordeaux", "bleu", "vert", "or", "noir", "blanc"].indexOf(id) >= 0; }
+  function genreSur(o) { return !o || o.zone === "mur" || o.zone === "plafond" || o.zone === "tapis" || o.zone === "fenetre" ? null : o.id === "vitrine" || o.id === "comptoir_gateaux" ? "patisserie" : /^plante/.test(o.id) ? "plante" : /^statue_/.test(o.id) && o.id !== "statue_monument" ? "statue" : null; }
   function decoLire(o, i) {                                      // lecture prudente de la déco sauvegardée (i = resto)
     const d = decoVide(), R = RESTOS[i];
     if (!o || typeof o !== "object") return d;
@@ -325,7 +329,7 @@
         const ob = p && OBJETS.find((q) => q.id === p.id);
         if (!ob || (R && ob.resto !== i) || !(reste[p.id] > 0) || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
         reste[p.id]--;
-        d.poses.push({ id: p.id, x: Math.round(p.x), y: Math.round(p.y), v: Math.max(0, Math.min((ob.vues || [ob.img]).length - 1, Math.floor(p.v) || 0)), flip: !!p.flip, e: Number.isFinite(p.e) && p.e > 0.3 && p.e <= 1 ? p.e : 1, f: Math.max(0, Math.floor(p.f) || 0), ...(p.s && genreSur(ob) ? { s: 1 } : {}) });
+        d.poses.push({ id: p.id, x: Math.round(p.x), y: Math.round(p.y), v: Math.max(0, Math.min((ob.vues || [ob.img]).length - 1, Math.floor(p.v) || 0)), flip: !!p.flip, e: Number.isFinite(p.e) && p.e > 0.3 && p.e <= 1 ? p.e : 1, f: Math.max(0, Math.floor(p.f) || 0), ...(p.s && genreSur(ob) ? { s: 1 } : {}), ...(recolorable(ob) && couleurOk(p.c) ? { c: p.c } : {}) });
       });
     } else d.poses = d.achats.some((a) => a.startsWith("objet:")) ? null : [];          // ancienne sauvegarde avec des objets : posés automatiquement au premier affichage (decoPoses)
     if (Number.isFinite(o.charme)) d.charme = Math.max(0, Math.min(99, Math.floor(o.charme)));
@@ -466,7 +470,7 @@
       },
     };
     G.mode = "play"; G.vue = "salle"; G.trans = null; if (champ()) champ().blur();
-    msg("Marche avec ← →, puis Espace pour agir", "1. Prends la commande   2. Va au passe-plats choisir la bonne assiette   3. Sers la bonne table. La souris marche aussi.", "info", 8);
+    msg("Marche avec ← →, puis Espace pour agir", "1. Prends la commande   2. Va " + (porteMode() ? "à la porte de la cuisine" : "au passe-plats") + " choisir la bonne assiette   3. Sers la bonne table. La souris marche aussi.", "info", 8);
   }
   const nbTables = () => (S_.tablesFixes ? S_.tables.length : Math.min(S_.ctx.tablesMax, S_.ctx.tablesDepart + Math.floor(S_.servis / BAL.clientsParTable)));
   const tableActive = (i) => (S_.tablesFixes ? i < S_.tables.length : ORDRE_OUVERTURE.indexOf(i) < nbTables());
@@ -777,7 +781,7 @@
     if (sv.carry) { msg("Sers d’abord ton plat !", "", "info", 1.6); return; }
     if (att.length) { demanderChoix(att[0].table); return; }
     if (S_.hatchQ.length) { sv.task = { type: "goHatch", table: S_.hatchQ[0].table }; allerVers(sv, HATCH_STAND.x, HATCH_STAND.y); sonClic(); return; }
-    msg("Rien à faire au passe-plats pour l’instant.", "", "info", 1.8);
+    msg(porteMode() ? "Rien à faire à la porte pour l’instant." : "Rien à faire au passe-plats pour l’instant.", "", "info", 1.8);
   }
   function arriveeChoix() {
     const t = S_.serveur.task; S_.serveur.task = null;
@@ -868,7 +872,7 @@
         c.etape = "cuisine"; const tk = ticketPar(c.ticket); if (tk) tk.etat = "attente";
         if (c.refus.length === 2 && !c.corrige) { c.corrige = true; messageErreur(c.cmd); }
         else msg("Plat refusé !", "Retourne en cuisine (touche C) : le ticket est de nouveau à cuisiner.", "bad", 3.4);
-      } else { c.etape = "choix"; msg("Plat refusé !", "Retourne au passe-plats : il reste d’autres assiettes.", "bad", 3); }
+      } else { c.etape = "choix"; msg("Plat refusé !", (porteMode() ? "Retourne à la porte" : "Retourne au passe-plats") + " : il reste d’autres assiettes.", "bad", 3); }
       return;
     }
     const nr = c.refus.length, part = BAL.paieErreur[Math.min(nr, BAL.paieErreur.length - 1)];
@@ -1026,7 +1030,7 @@
       if (c && c.state === "call") { arriveePrise(i); return; }
     }
     if (auPasse() && (commandesEnAttente().length || S_.hatchQ.length || sv.carry)) { agirAuPasse(); return; }
-    if (porteMode() && auPasse() && i < 0) { demanderCuisine(); return; }
+    if (porteMode() && auPasse() && i < 0 && S_.cuis.ouverte) { demanderCuisine(); return; }
     if (i < 0) msg(sv.carry ? "Place-toi devant une table (← →), puis Espace." : "Place-toi devant un client qui lève la main (← →), puis Espace.", "", "info", 2.2);
     else msg("Ce client n’a pas besoin de toi pour l’instant.", "", "info", 1.8);
   }
@@ -1116,7 +1120,7 @@
     { mur: { x0: 170, x1: 1750, y0: 110, y1: 490 }, plafond: 330, base: 520, sol: 636, tapisY: 735, fixes: [[1400, 1760, 130, 630], [1325, 1415, 200, 350]], fenetres: [[1400, 1760, 130, 630]] },
   ];
   const porteRect = (i) => { const bas = i === 0 ? 320 : SALLES[i].sol, h = i === 0 ? 200 : Math.min(PORTE_H, bas - 50), w = Math.round(h * PORTE_RATIO), cx = i === 0 ? 361 : PORTE_CX; return { x: cx - Math.round(w / 2), y: bas - h, w, h }; };          // bistrot : le mur s'arrête à y = 300, la porte est un peu plus petite ; autres restos : au bas du mur (ligne du sol)          // emprise de la grande porte du resto i
-  const porteMode = () => !!(S_ && S_.cuis && S_.cuis.ouverte && G.mode === "play" && G.vue === "salle");          // vrai : la porte a remplacé le passe-plats
+  const porteMode = () => !!(S_ && S_.cuis && modeDur());          // chantier 12 : mode difficile = la grande porte, toujours (le passe-plats reste en mode facile)
   let _modePorte = null;
   function majPorte() {                                            // met en place (ou retire) la grande porte : zones de clic, positions du serveur, plats
     const on = porteMode();
@@ -1125,7 +1129,7 @@
       Object.assign(DOOR, R); Object.assign(HATCH_RECT, R); Object.assign(HATCH_DESSIN, R); Object.assign(HATCH_OUV, R);
       Object.assign(HATCH_PLATE, { x: R.x + Math.round(R.w / 2), y: R.y + Math.round(R.h * 0.8) });
       Object.assign(HATCH_ZONE, { x: R.x + Math.round(R.w / 2) });
-      Object.assign(HATCH_STAND, { x: R.x + Math.round(R.w / 2), y: R.y + R.h - 6 }); Object.assign(DOOR_STAND, HATCH_STAND);
+      Object.assign(HATCH_STAND, { x: R.x + Math.round(R.w / 2), y: Y_COULOIR }); Object.assign(DOOR_STAND, HATCH_STAND);          // le serveur reste dans le couloir, devant la porte (il ne descend plus du haut du mur)
       PASSE_F = 1;
     } else if (_modePorte) {
       Object.assign(DOOR, { x: 546, y: 172, w: 146, h: 131 }); Object.assign(HATCH_RECT, { x: HATCH.x, w: Math.round(HATCH_IMG.w * HS) }); Object.assign(HATCH_STAND, DEFAUT_STAND); Object.assign(DOOR_STAND, DEFAUT_DOOR_STAND);
@@ -1140,8 +1144,8 @@
   const TABLE_R = (x) => ({ x: x - 102, y: TABLE_TOP - 22, w: 204, h: 330, table: true });          // emprise d'une table (et de son client) sur la salle
   function obstaclesSalle(i, d) {
     const R = RESTOS[i], S_i = SALLES[i];
-    const o = [{ x: HATCH.x, y: HATCH.y, w: 343, h: 272, gros: true }, { ...porteRect(i), gros: true }, { x: RAIL.x, y: 0, w: RAIL.w, h: 232, gros: true }, { x: 15, y: 15, w: 430, h: 145 }, { x: 1695, y: 15, w: 205, h: 70 }];          // gros = passe-plats, porte, rail : les tableaux gardent MARGE_MUR autour
-    S_i.fixes.forEach((f) => o.push({ x: f[0], y: f[2], w: f[1] - f[0], h: f[3] - f[2] }));
+    const o = [{ ...porteRect(i), gros: true, porte: true }, { x: RAIL.x, y: 0, w: RAIL.w, h: 232, gros: true }, { x: 15, y: 15, w: 430, h: 145 }, { x: 1695, y: 15, w: 205, h: 70 }];          // gros = passe-plats, porte, rail : les tableaux gardent MARGE_MUR autour
+    S_i.fixes.forEach((f) => o.push({ x: f[0], y: f[2], w: f[1] - f[0], h: f[3] - f[2], fen: true }));
     (d && d.tables ? d.tables.map((t) => t.x) : ORDRE_OUVERTURE.slice(0, R.tablesMax).map((t) => TABLE_X[t])).forEach((x) => o.push(TABLE_R(x)));          // les tables posées (sans déco donnée : tous les emplacements d'origine)
     return o;
   }
@@ -1189,7 +1193,7 @@
           if (!o.h && h > base - 50) { h = base - 50; w = h * iw / ih; }
           y = base - h; if (cx - w / 2 < 25 || cx + w / 2 > 1895) continue;
           r = { x: cx - w / 2, y, w, h };
-          if (o.zone !== "coin" && !libre(r, fixes, 3)) continue;
+          if (o.zone !== "coin" && !libre(r, fixes.filter((q) => !q.fen), 3)) continue;
           if (!libre(r, poses, 8)) continue;
           const f = o.zone === "coin" ? 0 : tables.reduce((s_, q) => s_ + aire(r, q), 0) / (w * h);     // les tables sont devant le meuble : elles peuvent en cacher le pied, pas plus
           if (f > fmax) continue;
@@ -1223,7 +1227,9 @@
   }
   // ------------------------------------------------------------------ chantier 8D : objets posés à la main
   const ECHELLES = [1, 0.85, 0.7, 0.55];
-  const SOL_BASE_MAX = 745;                                        // les pieds d'un meuble : de la ligne du sol de la salle jusque-là (les tables sont devant)
+  const SOL_BASE_MAX = 800;                                        // les pieds d'un meuble : de la ligne du sol de la salle jusque-là (chantier 12 : on peut les rapprocher, comme les tables)
+  const PIED_TABLES = 775;                                         // pieds des tables : un meuble dont les pieds sont plus bas se dessine DEVANT les tables
+  const persp = (i, y) => 1 + Math.max(0, y - SALLES[i].sol) * 0.0013;          // un meuble plus proche paraît un peu plus grand
   const PART_CACHEE_MAX = 0.7;                                     // un meuble ne peut pas être caché à plus de 70 % par les tables
   const objetDe = (id) => OBJETS.find((q) => q.id === id);
   // Chantier 11 : plantes, bustes, vitrines et présentoirs se posent au choix au sol OU sur un meuble (desserte). p.s = 1 : l'exemplaire est posé sur un plateau (p.y = le plateau).
@@ -1234,9 +1240,45 @@
     deco_desserte_bois_3q: { y: 0.3, x0: 0.2, x1: 0.85 }, deco_desserte_bois_profil: { y: 0.2, x0: 0.18, x1: 0.88 },
     deco_desserte_or_3q: { y: 0.3, x0: 0.2, x1: 0.85 }, deco_desserte_or_profil: { y: 0.2, x0: 0.18, x1: 0.88 },
   };
-  const genreSur = (o) => (!o || o.zone === "mur" || o.zone === "plafond" || o.zone === "tapis" || o.zone === "fenetre" ? null : o.id === "vitrine" || o.id === "comptoir_gateaux" ? "patisserie" : /^plante/.test(o.id) ? "plante" : /^statue_/.test(o.id) && o.id !== "statue_monument" ? "statue" : null);
   function plateaux(i, d, sauf) {                                  // les plateaux de meubles libres à poser dessus : { q, r, y, x0, x1 }
     return (d.poses || []).filter((q) => q !== sauf && !q.s).map((q) => { const o = objetDe(q.id), r = o && rectPose(i, q); if (!r) return null; const vues = o.vues || [o.img], pl = PLATEAUX[vues[q.v || 0] || vues[0]]; return pl ? { q, r, y: r.y + r.h * pl.y, x0: r.x + r.w * pl.x0, x1: r.x + r.w * pl.x1 } : null; }).filter(Boolean);
+  }
+  // Chantier 12 : couleur des meubles et objets (desserte, pots de plantes, bustes) — teinte appliquée avec les modes de fusion du canvas (pas de lecture de pixels : marche partout).
+  const COULEURS_OBJ = [
+    { id: "", nom: "Couleur d’origine" },
+    { id: "rouge", nom: "Rouge", fill: "#d63a30", post: null },
+    { id: "bordeaux", nom: "Bordeaux", fill: "#a82a4c", post: null },
+    { id: "bleu", nom: "Bleu", fill: "#3a72cc", post: null },
+    { id: "vert", nom: "Vert", fill: "#38a050", post: null },
+    { id: "or", nom: "Doré", fill: "#e8b830", post: ["screen", "#4a3a08"] },
+    { id: "noir", nom: "Noir", fill: "#666", post: ["multiply", "#8a8a8a"] },
+    { id: "blanc", nom: "Blanc", fill: "#eee", post: ["screen", "#a0a0a0"] },
+  ];
+  const POT = { plante: 0.62, plante_sansevieria: 0.6, plante_dracaena: 0.58, plante_ficus: 0.7, plante_monstera: 0.62, plante_palmier: 0.65 };          // part haute de l'image (feuilles) : seule la partie basse (le pot) est recolorée
+  const couleurObjDe = (id) => COULEURS_OBJ.find((c) => c.id === id && c.id);
+  const teinteCache = {};
+  function imgTeinte(nom, coul, pot) {                           // l'image « nom » recolorée (canvas mis en cache) ; null si impossible
+    const C = couleurObjDe(coul), im = img(nom); if (!C || !im) return null;
+    const k = nom + "|" + coul + "|" + (pot || 0); if (teinteCache[k]) return teinteCache[k];
+    const w = im.width, h = im.height, c = document.createElement("canvas"); c.width = w; c.height = h;
+    const x = c.getContext("2d"); x.drawImage(im, 0, 0);
+    x.save(); if (pot) { x.beginPath(); x.rect(0, Math.round(h * pot), w, h); x.clip(); }
+    x.globalCompositeOperation = "color"; x.fillStyle = C.fill; x.fillRect(0, 0, w, h);
+    if (C.post) { x.globalCompositeOperation = C.post[0]; x.fillStyle = C.post[1]; x.fillRect(0, 0, w, h); }
+    x.restore(); x.globalCompositeOperation = "destination-in"; x.drawImage(im, 0, 0);
+    return (teinteCache[k] = c);
+  }
+  function couleurMain() {                                       // C : couleur suivante pour l'objet tenu
+    const m = G.atelier.main; if (!m || m.type === "table") return;
+    const o = objetDe(m.id); if (!recolorable(o)) return;
+    const k = (COULEURS_OBJ.findIndex((c) => c.id === (m.p.c || "")) + 1) % COULEURS_OBJ.length;
+    if (COULEURS_OBJ[k].id) m.p.c = COULEURS_OBJ[k].id; else delete m.p.c;
+    dire8("Couleur : " + COULEURS_OBJ[k].nom + " (C pour changer).", true, 2.5); sonClic();
+  }
+  function piedPose(i, d, p) {                                     // ligne des pieds qui décide de l'ordre de dessin : celle du meuble, si l'objet est posé dessus
+    if (!p.s) return p.y;
+    const t = plateaux(i, d, null).find((q) => Math.abs(p.y - q.y) < 4 && p.x >= q.x0 && p.x <= q.x1);
+    return t ? t.q.y : p.y;
   }
   function redescendre(i, d) {                                     // un meuble a été enlevé : les objets qui étaient dessus redescendent au sol (ou en réserve s'il n'y a plus de place)
     const Sa = SALLES[i];
@@ -1257,6 +1299,7 @@
     if (o.zone === "mur" || o.zone === "plafond") { const M = Sa.mur, haut = o.zone === "plafond" ? Sa.plafond : M.y1 - M.y0 - 14; w = o.w * e; h = w * ih / iw; if (h > haut) { h = haut; w = h * iw / ih; } return { x: p.x - w / 2, y: o.zone === "plafond" ? 0 : p.y, w, h }; }
     const base0 = o.base || Sa.sol; h = o.h ? o.h * e : o.w * e * ih / iw; w = o.h ? h * iw / ih : o.w * e;          // sol, coin : p.y = ligne des pieds
     if (!o.h && h > base0 - 50) { h = base0 - 50; w = h * iw / ih; }
+    if (o.zone !== "coin") { const k = persp(i, p.y); w *= k; h *= k; }
     return { x: p.x - w / 2, y: p.y - h, w, h };
   }
   const partCachee = (r, tables) => tables.reduce((t_, q) => t_ + aire(r, q), 0) / Math.max(1, r.w * r.h);
@@ -1277,7 +1320,7 @@
       if (r.x < M.x0 || r.x + r.w > M.x1) return non("Il faut l’accrocher sur le mur du fond.");
       if (o.zone === "mur" && (r.y < M.y0 - 10 || r.y + r.h > M.y1)) return non("Il faut l’accrocher sur la partie haute du mur.");
       if (o.zone === "plafond" && !Sa.plafond) return non("Pas de plafond à accrocher ici.");
-      if (!libre(tous, 3, o.zone === "mur" ? MARGE_MUR : 3)) return non("Ça cache la porte, le passe-plats, une fenêtre ou une table.");
+      if (!libre(tous, 3, o.zone === "mur" ? MARGE_MUR : 3)) return non("Ça cache la porte de la cuisine, une fenêtre ou une table.");
       return libre(memeCouche, 12) ? { ok: true, r } : non("Ça touche un autre objet.");
     }
     if (p.s) {                                                      // posé sur un meuble
@@ -1291,16 +1334,17 @@
     // sol, coin : les pieds entre la ligne du sol et la ligne des tables
     if (p.y < Sa.sol || p.y > SOL_BASE_MAX) return non("Il faut le poser au sol, derrière les tables.");
     if (r.x < 25 || r.x + r.w > 1895) return non("Ça dépasse de la salle.");
-    if (o.zone !== "coin" && !libre(fixes, 3)) return non("Ça cache la porte, le passe-plats ou une fenêtre.");
+    if (o.zone !== "coin" && !libre(fixes.filter((q) => !q.fen), 3)) return non("Ça cache la porte de la cuisine ou les tickets.");          // chantier 12 : devant une fenêtre, c'est permis
     if (!libre(memeCouche, 8)) return non("Ça touche un autre objet.");
-    if (o.zone !== "coin" && partCachee(r, tables) > PART_CACHEE_MAX) return non("Les tables le cacheraient trop.");
+    if (o.zone !== "coin" && p.y > PIED_TABLES) { if (tables.some((q) => aire(r, { x: q.x, y: TABLE_TOP, w: q.w, h: 225 }) > 0.08 * q.w * 225)) return non("Ça cacherait une table : pose-le entre ou à côté des tables."); }
+    else if (o.zone !== "coin" && partCachee(r, tables) > PART_CACHEE_MAX) return non("Les tables le cacheraient trop.");
     return { ok: true, r };
   }
   function tableValide(i, d, x, sauf) {                            // une table peut-elle être posée là ?
     if (x < TABLE_X_MIN || x > TABLE_X_MAX) return { ok: false, raison: "Trop près du bord de la salle." };
     if (d.tables.some((t) => t !== sauf && Math.abs(t.x - x) < TABLE_ECART)) return { ok: false, raison: "Trop près d’une autre table : laisse la place de passer." };
     const rects = d.tables.filter((t) => t !== sauf).map((t) => TABLE_R(t.x)).concat([TABLE_R(x)]);
-    for (const q of d.poses) { const o = objetDe(q.id), r = o && rectPose(i, q); if (r && (o.zone === "sol") && partCachee(r, rects) > PART_CACHEE_MAX) return { ok: false, raison: "Cette table cacherait trop un de tes meubles." }; }
+    for (const q of d.poses) { const o = objetDe(q.id), r = o && rectPose(i, q); if (r && (o.zone === "sol")) { if (q.y > PIED_TABLES) { if (rects.some((t) => aire(r, { x: t.x, y: TABLE_TOP, w: t.w, h: 225 }) > 0.08 * t.w * 225)) return { ok: false, raison: "Un de tes meubles cacherait cette table." }; } else if (partCachee(r, rects) > PART_CACHEE_MAX) return { ok: false, raison: "Cette table cacherait trop un de tes meubles." }; } }
     return { ok: true };
   }
   function trouverPlace(i, d, id) {                                // première place valable pour un nouvel exemplaire (ou null) : sert à refuser un achat sans place et à « Placer pour moi »
@@ -1340,7 +1384,8 @@
   }
   function dessinerPose(i, p, fantome) {                           // un exemplaire (fantome = { ok } : aperçu semi-transparent vert ou rouge pendant la pose)
     const o = objetDe(p.id), r = rectPose(i, p); if (!o || !r) return;
-    const vues = o.vues || [o.img], im = img(vues[p.v || 0] || vues[0]); if (!im) return;
+    const vues = o.vues || [o.img], nomV = vues[p.v || 0] || vues[0]; let im = img(nomV); if (!im) return;
+    if (p.c && recolorable(o)) im = imgTeinte(nomV, p.c, /^plante/.test(o.id) ? POT[o.id] || 0.62 : 0) || im;
     ctx.save();
     if (fantome) ctx.globalAlpha = 0.72;
     if (!fantome && !p.s && (o.zone === "sol" || o.zone === "coin")) { ctx.fillStyle = "rgba(40,20,10,0.22)"; ctx.beginPath(); ctx.ellipse(r.x + r.w / 2, r.y + r.h - 2, r.w * 0.46, 9, 0, 0, 7); ctx.fill(); }
@@ -1348,9 +1393,9 @@
     ctx.restore();
     if (fantome) { ctx.save(); ctx.lineWidth = 6; ctx.strokeStyle = fantome.ok ? "#2f9a3f" : "#d9473b"; ctx.setLineDash([14, 8]); ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.restore(); }
   }
-  function dessinerObjets(d, i) {                                  // les exemplaires posés : tapis d'abord (au sol), puis le reste du fond vers l'avant (les tables, devant, sont dessinées après)
+  function dessinerObjets(d, i, devant) {                                  // les exemplaires posés : tapis d'abord (au sol), puis le reste du fond vers l'avant (les tables, devant, sont dessinées après)
     if (!d || i === undefined || i < 0) return;
-    const L = decoPoses(i, d).map((p) => ({ p, o: objetDe(p.id), r: rectPose(i, p) })).filter((x) => x.o && x.r);
+    const L = decoPoses(i, d).map((p) => ({ p, o: objetDe(p.id), r: rectPose(i, p) })).filter((x) => x.o && x.r && (x.o.zone !== "tapis" && x.o.zone !== "mur" && x.o.zone !== "plafond" && x.o.zone !== "fenetre" && piedPose(i, d, x.p) > PIED_TABLES) === !!devant);
     L.filter((x) => x.o.zone === "tapis").concat(L.filter((x) => x.o.zone !== "tapis" && !x.p.s).sort((a, b) => (a.r.y + a.r.h) - (b.r.y + b.r.h))).concat(L.filter((x) => x.p.s).sort((a, b) => a.p.x - b.p.x)).forEach((x) => dessinerPose(i, x.p));          // chantier 11 : ce qui est posé sur un meuble se dessine après les meubles
   }
   const ARDOISE = { x: 790, y: 196, s: 0.40 };      // mur du fond, entre la porte de la cuisine et la fenêtre (sous le rail des tickets)
@@ -1687,8 +1732,8 @@
           po.etat = "pret"; po.t = 0;
           const tk = ticketPar(po.ticketId); if (tk) tk.etat = "pret";
           sonCloche();
-          if (G.vue === "salle") msg("Un plat est prêt en cuisine !", "Passe la porte (touche C) pour l’envoyer au passe-plats.", "info", 3.2);
-          else chefDit("bravo", "C’est prêt ! Clique sur le plat pour l’envoyer au passe-plats.", 4);
+          if (G.vue === "salle") msg("Un plat est prêt en cuisine !", "Passe la porte (touche C) pour envoyer le plat en salle.", "info", 3.2);
+          else chefDit("bravo", "C’est prêt ! Clique sur le plat pour le poser près de la porte.", 4);
         }
       } else if (po.etat === "rate") {
         po.t += dt;
@@ -1782,7 +1827,7 @@
     po.mauvais = false; po.forme = null;
     S_.cuisines++; S_.cuis.cloche = 0.9; sonCloche();
     Object.assign(po, { etat: "repos", t: 0, ticketId: null, table: -1, dish: null, cmd: null });
-    chefDit("bravo", "Le plat part au passe-plats. Retourne en salle : le serveur le porte à la table !", 5);
+    chefDit("bravo", "Le plat est posé près de la porte. Retourne en salle : le serveur le porte à la table !", 5);
   }
 
   function clicPoste(k) {
@@ -1930,9 +1975,8 @@
     ctx.fillStyle = sur ? "#e8b33f" : FOND(); rr(R.x - 4, R.y + R.h + 12, R.w + 8, 56, 14); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 4; ctx.stroke();
     texte("SALLE (C)", R.x + R.w / 2, R.y + R.h + 41, 26, "#4a2f22");
   }
-  function dessinerPorteSalle() {
-    if (!S_.cuis.ouverte) return;
-    const R = DOOR, sp = img("porte_battante");
+  function dessinerPorteImg(R) {                                  // la grande porte de la cuisine (image + plaque « CUISINE »), au rectangle R
+    const sp = img("porte_battante");
     if (sp) { const k = Math.min(R.w / sp.width, R.h / sp.height), w = sp.width * k, h = sp.height * k; ctx.drawImage(sp, R.x + R.w / 2 - w / 2, R.y + R.h - h, w, h); }
     else {
       ctx.lineJoin = "round"; ctx.lineWidth = 5; ctx.strokeStyle = "#3a2210";
@@ -1946,6 +1990,12 @@
     const gr = R.w > 250, ph = gr ? 40 : 22;          // grande porte : plaque plus grande
     ctx.fillStyle = "#e8b33f"; rr(R.x + 2 + (gr ? R.w * 0.25 : 0), R.y - ph, R.w - 4 - (gr ? R.w * 0.5 : 0), ph, 6); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 3; ctx.stroke();
     texte("CUISINE", R.x + R.w / 2, R.y - ph / 2 - 1, gr ? 28 : 16, "#4a2f22");
+  }
+  function dessinerPorteSalle() {
+    if (!porteMode()) return;
+    dessinerPorteImg(DOOR);
+    const R = DOOR;
+    if (!S_.cuis.ouverte) return;
     const attend = S_.tickets.some((t) => t.cuisine && t.etat === "attente") || S_.cuis.postes.some((po) => po.etat === "pret");
     if (attend) {                                           // la cuisine appelle
       const e = A.calme ? 1 : 1 + Math.sin(G.t * 7) * 0.12;
@@ -2005,18 +2055,19 @@
     [["etagere_bocaux", 565, 50, 150], ["casseroles_suspendues", 1000, 262, 105], ["hotte_inox", 1400, 150, 205]].forEach(([n, x, y, h]) => { const s = img(n); if (s) ctx.drawImage(s, x - s.width * h / s.height / 2, y, s.width * h / s.height, h); });
     if (!img("casseroles_suspendues") && !img("hotte_inox")) { ctx.fillStyle = "#8b5a3c"; rr(1320, 175, 300, 56, 14); ctx.fill(); ctx.strokeStyle = "#5a3a29"; ctx.lineWidth = 5; ctx.stroke(); texte("CUISINE", 1470, 204, 40, "#f6e9cf", "center", "#5a3a29"); }
     dessinerPorteCuisine();
-    // passe-plats (miroir de celui de la salle) et cloche de service
-    const im = img("passe_plats");
-    if (im) { ctx.save(); ctx.translate(CUIS_PASSE.x, CUIS_PASSE.y); ctx.scale(-CUIS_PASSE.s, CUIS_PASSE.s); ctx.drawImage(im, 0, 0); ctx.restore(); }
-    S_.hatchQ.slice(0, 3).forEach((h, i, a) => { const x = CUIS_PASSE.x - 116 + (i - (a.length - 1) / 2) * 62; dessiner(h.dish, x, CUIS_PASSE.y + 96, 0.14, 0.11, "bas"); texte(String(h.table + 1), x, CUIS_PASSE.y + 32, 24, "#fff", "center", "#5a3a29"); });
-    ctx.save(); ctx.translate(CUIS_PASSE.x - 116, 575); if (cu.cloche > 0) ctx.rotate(Math.sin(cu.cloche * 30) * 0.18); dessiner("cloche_service", 0, 0, 0.34, 0.34, "bas"); ctx.restore();
-    texte("Passe-plats", CUIS_PASSE.x - 116, 598, 22, "#fff", "center", "#5a3a29", "normal");
+    // chantier 12 : plus de passe-plats. Les plats prêts attendent sur une tablette de service près de la porte de la salle, avec la cloche
+    const TB = { x: 18, y: 640, w: 214 };
+    ctx.save(); ctx.fillStyle = "#8a5a36"; ctx.strokeStyle = "#3a2210"; ctx.lineWidth = 4; rr(TB.x, TB.y, TB.w, 16, 6); ctx.fill(); ctx.stroke();
+    ctx.fillRect(TB.x + 14, TB.y + 16, 10, 52); ctx.fillRect(TB.x + TB.w - 24, TB.y + 16, 10, 52); ctx.restore();
+    S_.hatchQ.slice(0, 3).forEach((h, i) => { const x = TB.x + 40 + i * 52; dessiner(h.dish, x, TB.y + 2, 0.11, 0.085, "bas"); texte(String(h.table + 1), x, TB.y - 52, 22, "#fff", "center", "#5a3a29"); });
+    ctx.save(); ctx.translate(TB.x + TB.w - 22, TB.y + 2); if (cu.cloche > 0) ctx.rotate(Math.sin(cu.cloche * 30) * 0.18); dessiner("cloche_service", 0, 0, 0.26, 0.26, "bas"); ctx.restore();
+    texte("Plats prêts", TB.x + TB.w / 2 - 20, TB.y + 92, 22, "#fff", "center", "#5a3a29", "normal");
     POSTES.forEach((P) => dessinerPoste(P.k));
     dessinerChef();
     dessinerRail();
     dessinerMoniteurSalle();
     if (!cu.saisie) {
-      texte("1  Choisis un ticket     2  Clique sur le bon poste     3  Écris la forme     4  Envoie le plat au passe-plats", W / 2, 985, 30, "#fff", "center", "#5a3a29", "normal");
+      texte("1  Choisis un ticket     2  Clique sur le bon poste     3  Écris la forme     4  Envoie le plat près de la porte", W / 2, 985, 30, "#fff", "center", "#5a3a29", "normal");
       texte("Clavier : 1 2 3 = postes · ← → = ticket · C = retour en salle", W / 2, 1030, 26, "#fff", "center", "#5a3a29", "normal");
     }
   }
@@ -2156,7 +2207,7 @@
   function dessinerTitre() {
     ctx.fillStyle = "rgba(40,20,10,0.55)"; ctx.fillRect(0, 0, W, H);
     texte("Le Resto du Passé Simple", W / 2, 190, 112, "#f6e9cf", "center", "#5a3a29");
-    texte("Sers tes clients : trouve au passe-plats l’assiette avec la bonne forme du passé simple !", W / 2, 285, 40, "#fff", "center", "#5a3a29", "normal");
+    texte("Sers tes clients : choisis l’assiette avec la bonne forme du passé simple !", W / 2, 285, 40, "#fff", "center", "#5a3a29", "normal");
     texte("Vitesse des clients :", W / 2, 360, 34, "#fff", "center", "#5a3a29");
     BTN.normal = bouton(W / 2 - 470, 390, 290, 70, "Normal", G.chrono === "normal", 32);
     BTN.lent = bouton(W / 2 - 145, 390, 290, 70, "Lent", G.chrono === "lent", 32);
@@ -2802,7 +2853,9 @@
         return;
       }
       if (p.s) { delete p.s; p.e = 1; }
-      p.y = Math.max(SALLES[i].sol, Math.min(SOL_BASE_MAX, Math.round((pt.y + rectPose(i, { ...p, y: 0 }).h / 2) / 5) * 5));
+      let y1 = Math.max(SALLES[i].sol, Math.min(SOL_BASE_MAX, pt.y + rectPose(i, { ...p, y: SALLES[i].sol }).h / 2));
+      y1 = Math.max(SALLES[i].sol, Math.min(SOL_BASE_MAX, pt.y + rectPose(i, { ...p, y: y1 }).h / 2));          // la taille dépend de la profondeur : deux passes
+      p.y = Math.max(SALLES[i].sol, Math.min(SOL_BASE_MAX, Math.round(y1 / 5) * 5));
     }
   }
   function deplacerMain(dx, dy) {                                  // clavier : les flèches déplacent l'objet tenu
@@ -2921,8 +2974,9 @@
     if (!dessiner(bgk, 0, 0, W / (img(bgk) ? img(bgk).width : W), H / (img(bgk) ? img(bgk).height : H), "haut")) { ctx.fillStyle = "#c9b48f"; ctx.fillRect(0, 0, W, H); }
     if (R.tint && bgk === "bg_salle") teinter(R.tint);
     decoRendu = d; papierPeint(d, i); dessinerObjets(d, i);
-    dessinerPasse();
+    if (modeDur()) dessinerPorteImg(porteRect(i)); else dessinerPasse();          // chantier 12 : grande porte en mode difficile, passe-plats en mode facile
     d.tables.forEach((t, n) => dessinerTable({ i: n, x: t.x, style: t.style, nappes: t.nappes, client: null, plat: null, bulle: null }));
+    dessinerObjets(d, i, true);
     if (surSalle) surSalle(k);
     decoRendu = avant; restoRendu = avantR; ctx.restore();
     ctx.lineWidth = 8; ctx.strokeStyle = "#5a3a29"; ctx.strokeRect(x0, y0, w, H * k);
@@ -2980,13 +3034,14 @@
     });
     // boutons d'action sous la salle
     BTN.acts = []; const ya = AT.ay + H * AT.aw / W + 12; let xa = AT.ax;
-    const ajout = (cle, texte_, w_, actif) => { const b = bouton(xa, ya, w_, 56, texte_, !!actif, 22); BTN.acts.push(Object.assign(b, { cle })); xa += w_ + 12; };
+    const ajout = (cle, texte_, w_, actif) => { const b = bouton(xa, ya, w_, 56, texte_, !!actif, 20); BTN.acts.push(Object.assign(b, { cle })); xa += w_ + 8; };
     if (m) {
-      ajout("poser", "Poser ici (Entrée)", 245, true);
-      const o = m.type === "objet" ? objetDe(m.id) : null; if (o && (o.zone === "sol" || o.zone === "coin" || (o.vues || []).length > 1)) ajout("tourner", "Tourner (R)", 165);
-      ajout("auto", "Placer pour moi (A)", 250);
-      ajout("annuler", "Annuler (Échap)", 200);
-      if (m.type === "objet") ajout("ranger", "Ranger (Suppr)", 195);
+      ajout("poser", "Poser ici (Entrée)", 215, true);
+      const o = m.type === "objet" ? objetDe(m.id) : null; if (o && (o.zone === "sol" || o.zone === "coin" || (o.vues || []).length > 1)) ajout("tourner", "Tourner (R)", 140);
+      if (o && recolorable(o)) ajout("couleur", "Couleur (C)", 150);
+      ajout("auto", "Placer pour moi (A)", 215);
+      ajout("annuler", "Annuler (Échap)", 175);
+      if (m.type === "objet") ajout("ranger", "Ranger (Suppr)", 165);
       if (val && !val.ok) texte(val.raison, AT.ax + AT.aw / 2, ya + 84, 24, "#a82e24", "center", null, "normal");
     } else {
       if (at.tsel >= 0 && d.tables[at.tsel]) { ajout("deplacerTable", "Déplacer la table n° " + (at.tsel + 1), 360); texte("Table n° " + (at.tsel + 1) + " choisie : clique une nappe ou un style pour l’habiller.", AT.ax + AT.aw / 2, ya + 84, 24, ENCRE(), "center", null, "normal"); }
@@ -3002,7 +3057,7 @@
   }
   function actionAtelier(cle) {
     const at = G.atelier, i = at.resto, d = decoAtelier();
-    if (cle === "poser") poserMain(); else if (cle === "tourner") tournerMain(); else if (cle === "auto") placerPourMoi(); else if (cle === "annuler") annulerMain(); else if (cle === "ranger") rangerMain();
+    if (cle === "poser") poserMain(); else if (cle === "tourner") tournerMain(); else if (cle === "couleur") couleurMain(); else if (cle === "auto") placerPourMoi(); else if (cle === "annuler") annulerMain(); else if (cle === "ranger") rangerMain();
     else if (cle === "deplacerTable") { const t = d.tables[at.tsel]; if (!t) return; d.tables.splice(at.tsel, 1); commencerPose({ type: "table", p: { x: t.x }, orig: { x: t.x }, style: t.style, nappes: t.nappes }); }
     else if (cle === "reserve") { const o = OBJETS.find((q) => enReserve(d, q.id) > 0); if (!o) return; const p = trouverPlace(i, d, o.id); if (!p) { dire8("Pas de place pour « " + o.nom + " » : libère de la place.", false, 5); sonKo(); return; } commencerPose({ type: "objet", id: o.id, p, nouveau: true }); }
   }
@@ -3057,8 +3112,9 @@
     if (!enCuisine && R_) papierPeint(decoRendu, di);
     if (G.mode === "title") {
       if (R_) {                                                    // 9C : la salle du resto (décor, objets, passe-plats, tables posées) en arrière-plan
-        dessinerObjets(decoRendu, di); dessinerPasse();
+        dessinerObjets(decoRendu, di); if (modeDur()) dessinerPorteImg(porteRect(di)); else dessinerPasse();
         triTables(decoRendu.tables.map((t) => ({ x: t.x, style: t.style, nappes: t.nappes }))).forEach((t, i) => dessinerTable({ i, x: t.x, style: t.style, nappes: t.nappes, client: null, plat: null, platT: 0 }));
+        dessinerObjets(decoRendu, di, true);
       }
       dessinerTitre(); return;
     }
@@ -3080,6 +3136,7 @@
       const sv = S_.serveur, derriere = sv.y < 800;
       if (derriere) dessinerServeur();
       S_.tables.forEach((tb) => { if (tableActive(tb.i)) dessinerTable(tb); });
+      dessinerObjets(decoRendu, di, true);                                  // chantier 12 : les objets posés devant les tables
       if (!derriere) dessinerServeur();
       dessinerAction();
       dessinerDialogue();
@@ -3151,7 +3208,7 @@
       if (p.y < PCH.y - 10) S_.panel = null;          // clic hors du panneau : on ferme (la commande reste à préparer)
       return;
     }
-    if (S_.cuis.ouverte && dans(DOOR, p)) { if (commandesEnAttente().length || S_.hatchQ.length) agirAuPasse(); else demanderCuisine(); return; }          // la grande porte remplace le passe-plats : assiettes d'abord, sinon la cuisine
+    if (porteMode() && dans(DOOR, p)) { if (commandesEnAttente().length || S_.hatchQ.length) agirAuPasse(); else if (S_.cuis.ouverte) demanderCuisine(); else msg("La cuisine n’est pas encore ouverte.", "Continue à servir sans erreur pour l’ouvrir !", "info", 2.6); return; }          // la grande porte remplace le passe-plats : assiettes d'abord, sinon la cuisine
     for (let k = 0; k < S_.tickets.length; k++) {         // clic sur un ticket du rail : aller choisir l'assiette de cette commande
       if (dans(ticketRect(k), p)) { const t = S_.tickets[k], c = S_.tables[t.table].client; if (c && c.ticket === t.id && c.etape === "choix") demanderChoix(t.table); return; }
     }
@@ -3231,7 +3288,7 @@
         if (k === "Escape") annulerMain(); else if (k === "Enter" || k === " ") poserMain();
         else if (k === "ArrowLeft") deplacerMain(e.shiftKey ? -60 : -15, 0); else if (k === "ArrowRight") deplacerMain(e.shiftKey ? 60 : 15, 0);
         else if (k === "ArrowUp") deplacerMain(0, e.shiftKey ? -60 : -15); else if (k === "ArrowDown") deplacerMain(0, e.shiftKey ? 60 : 15);
-        else if (k === "r" || k === "R") tournerMain(); else if (k === "a" || k === "A") placerPourMoi(); else if (k === "Delete" || k === "Backspace") rangerMain();
+        else if (k === "r" || k === "R") tournerMain(); else if (k === "c" || k === "C") couleurMain(); else if (k === "a" || k === "A") placerPourMoi(); else if (k === "Delete" || k === "Backspace") rangerMain();
         return;
       }
       if (k === "Escape") { e.preventDefault(); quitterAtelier(); }
@@ -3319,7 +3376,7 @@
 
   // crochets de test (Playwright) : avancer le temps sans attendre
   window.__jeu = {
-    porteRect, porteMode, majPorte, plateaux, genreSur, redescendre, PLATEAUX, objetDe, poseValide, suivre, rectPose, DOOR, HATCH_STAND, HATCH_RECT, prendreDansSalle, poserMain, commencerPose, decoAtelier,
+    img, COULEURS_OBJ, imgTeinte, couleurMain, recolorable, piedPose, persp, PIED_TABLES, porteRect, porteMode, majPorte, plateaux, genreSur, redescendre, PLATEAUX, objetDe, poseValide, suivre, rectPose, DOOR, HATCH_STAND, HATCH_RECT, prendreDansSalle, poserMain, commencerPose, decoAtelier,
     G, ACCU, RESTOS, SALLES, arriveeService, lassitude, PASSES, coteIndic, defilerAtelier, HATCH_OUV, HATCH_PLATE, carteGeo, mursDe, PAPIERS, NAPPES, OBJETS, TABLES, CHAISES, obstaclesSalle, satisfactionDeco, recolorer, tirerClient, nouveauClient, CASTING, placement, listeAtelier, tableChoisie, styleTable, rectPose, poseValide, tableValide, trouverPlace, trouverPlaceTable, decoPoses, dessinerPose, objetDe, nbExemplaires, nbPoses, enReserve, prixItem, TABLE_PLUS, TABLE_R, commencerPose, suivre, poserMain, annulerMain, rangerMain, tournerMain, placerPourMoi, prendreDansSalle, actionAtelier, ongletsAtelier, decoFacile, ptSalle, apercuRect, quitterAtelier, deplacerMain, triTables, SOL_BASE_MAX, TABLE_X_MIN, TABLE_X_MAX, TABLE_ECART, CATALOGUE, PRIX_RESTO, prixDeco, possede, decoLire, campLire, ouvrirAtelier, acheterOuChoisir, changerRestoAtelier, clicAtelier, dessinerAtelier, tableActive, nbTables, ouvrirResto, ouvrir, finir, dessinerCarte, clicCarte, nouvelleCampagne, entrainementLibre, campVide, ctxResto, entrerResto, BAL, A, sauver, GUIDE, verifierGuide, fermerArticle, ouvrirNom, validerNom, CLE, get S() { return S_; }, start: nouvellePartie, clic, agirSurPlace, tableProche, choisir, ligneDialogue, avancerDialogue, ouvrirChoix, reessayer, agirAuPasse, auPasse, commandesEnAttente, demanderChoix, HATCH_STAND, HATCH_ZONE, HATCH_RECT, FEED_BTN, update, rendre, validerSaisie, changerVue, majTexte, ticketSelId, posteActif, POSTES, DOOR, DOOR_STAND, CUIS_PORTE, rectsSaisie, ticketRect,
     TEINTES, NOUVEAUX_ECH, exporterPartie, VERSION_SAUVEGARDE, ouvrirMdp, validerMdp, sortirDebug, clicDebug, toucheDebug, empreinte, BTN_DEBUG, terminerSurSucces, actionReussite, ouvrirAtelierEnJeu, synchroTablesJeu, BTN_DECO, lancerFinale, majFinale, repondreFinale, bilanFinale, EPREUVE_NB,
     avancer(sec) { for (let t = 0; t < sec; t += 1 / 60) update(1 / 60); rendre(); },
