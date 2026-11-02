@@ -1,6 +1,6 @@
 # CHANTIER 12 — Retours du mode essai : cuisine, porte, objets plus près, couleurs (01/11/2026)
 
-Version : « Version du 01/11, 19 h » (`?v=20261101-19`). Fait suite au chantier 11.
+Version : « Version du 01/11, 20 h » (`?v=20261101-20`). Fait suite au chantier 11.
 
 ## Demandes de Julie (1er novembre)
 1. Le serveur « descend du haut du mur » devant la porte de la cuisine.
@@ -28,3 +28,8 @@ test_11 55/55 ; jeu 169, 8a 11, 8b 23, 8c 24, 8d 44, 7e 27, 9 40, cuisine 33, mo
 
 ## Non testé ici
 Rendu sur iPad Mini 2 ; équilibrage réel du temps de cuisine avec les élèves (à ajuster dans `BAL.cuisinePatMul` / `cuisinePlus`).
+
+## Retouche du soir (19 h 21)
+- **Passe-plats (mode facile)** posé juste au-dessus du lambris de chaque resto (bas du rebord à y = 222 / 360 / 434 / 434) ; au bistrot il est centré dans l'interstice entre le cadre de score et la barre des tickets (x = 560). Sa zone cliquable, la zone du clavier et la place du serveur suivent le dessin.
+- **Porte du bistrot (mode difficile)** : reculée sur la ligne mur/sol (y = 300) et placée dans le même interstice (x = 560).
+- Tests adaptés : test_9 (hauteurs du passe-plats), test_11, test_jeu (position du serveur au passe-plats).

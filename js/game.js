@@ -1119,7 +1119,7 @@
     { mur: { x0: 170, x1: 1750, y0: 110, y1: 490 }, plafond: 330, base: 520, sol: 618, tapisY: 735, fixes: [[1030, 1390, 120, 620], [920, 1010, 200, 350]], fenetres: [[1030, 1390, 120, 620]] },
     { mur: { x0: 170, x1: 1750, y0: 110, y1: 490 }, plafond: 330, base: 520, sol: 636, tapisY: 735, fixes: [[1400, 1760, 130, 630], [1325, 1415, 200, 350]], fenetres: [[1400, 1760, 130, 630]] },
   ];
-  const porteRect = (i) => { const bas = i === 0 ? 320 : SALLES[i].sol, h = i === 0 ? 200 : Math.min(PORTE_H, bas - 50), w = Math.round(h * PORTE_RATIO), cx = i === 0 ? 361 : PORTE_CX; return { x: cx - Math.round(w / 2), y: bas - h, w, h }; };          // bistrot : le mur s'arrête à y = 300, la porte est un peu plus petite ; autres restos : au bas du mur (ligne du sol)          // emprise de la grande porte du resto i
+  const porteRect = (i) => { const bas = i === 0 ? 300 : SALLES[i].sol, h = i === 0 ? 200 : Math.min(PORTE_H, bas - 50), w = Math.round(h * PORTE_RATIO), cx = i === 0 ? 560 : PORTE_CX; return { x: cx - Math.round(w / 2), y: bas - h, w, h }; };          // bistrot : le mur s'arrête à y = 300, la porte est un peu plus petite ; autres restos : au bas du mur (ligne du sol)          // emprise de la grande porte du resto i
   const porteMode = () => !!(S_ && S_.cuis && modeDur());          // chantier 12 : mode difficile = la grande porte, toujours (le passe-plats reste en mode facile)
   let _modePorte = null;
   function majPorte() {                                            // met en place (ou retire) la grande porte : zones de clic, positions du serveur, plats
@@ -1132,8 +1132,11 @@
       Object.assign(HATCH_STAND, { x: R.x + Math.round(R.w / 2), y: Y_COULOIR }); Object.assign(DOOR_STAND, HATCH_STAND);          // le serveur reste dans le couloir, devant la porte (il ne descend plus du haut du mur)
       PASSE_F = 1;
     } else if (_modePorte) {
-      Object.assign(DOOR, { x: 546, y: 172, w: 146, h: 131 }); Object.assign(HATCH_RECT, { x: HATCH.x, w: Math.round(HATCH_IMG.w * HS) }); Object.assign(HATCH_STAND, DEFAUT_STAND); Object.assign(DOOR_STAND, DEFAUT_DOOR_STAND);
-      Object.assign(HATCH_ZONE, { x: HATCH.x + Math.round(343 / 2) });
+      Object.assign(DOOR, { x: 546, y: 172, w: 146, h: 131 }); Object.assign(DOOR_STAND, DEFAUT_DOOR_STAND);
+    }
+    if (!on) {                                                     // passe-plats (mode facile) : sa zone, et la place du serveur à sa droite, suivent le passe-plats de ce resto
+      const P = PASSES[G.resto] || PASSES[0], cx = P.cx || 361.5, w = HATCH_DESSIN.w || 343;
+      Object.assign(HATCH_ZONE, { x: Math.round(cx) }); Object.assign(HATCH_STAND, { x: Math.round(cx + w / 2 + 32), y: DEFAUT_STAND.y });
     }
     _modePorte = on;
   }
@@ -1441,10 +1444,10 @@
   // Passe-plats (chantier 8B) : une image par resto (bois, crème, palace), rognée au-dessus du boîtier (on retire le câble de la lampe) et ajustée au même emplacement contre le mur.
   // sy = première ligne gardée ; ouv = ouverture et plat = point où se posent les assiettes, en pixels de l'image.
   const PASSES = [
-    { img: "passe_plats_bois", bas: 292, hmax: 150, sy: 45, ouv: { x: 117, y: 135, w: 527, h: 340 }, plat: { x: 359, y: 492 } },
-    { img: "passe_plats_creme", bas: 422, sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
-    { img: "passe_plats_creme", bas: 422, sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
-    { img: "passe_plats_palace", bas: 422, sy: 60, ouv: { x: 97, y: 145, w: 653, h: 420 }, plat: { x: 423, y: 586 } },
+    { img: "passe_plats_bois", cx: 560, bas: 222, hmax: 150, sy: 45, ouv: { x: 117, y: 135, w: 527, h: 340 }, plat: { x: 359, y: 492 } },
+    { img: "passe_plats_creme", bas: 360, sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
+    { img: "passe_plats_creme", bas: 434, sy: 125, ouv: { x: 168, y: 220, w: 484, h: 330 }, plat: { x: 412, y: 584 } },
+    { img: "passe_plats_palace", bas: 434, sy: 60, ouv: { x: 97, y: 145, w: 653, h: 420 }, plat: { x: 423, y: 586 } },
   ];
   let PASSE_F = 1;
   const HATCH_DESSIN = { x: 0, y: 0, w: 0, h: 0 };          // là où le passe-plats est réellement dessiné (zone cliquable en plus de HATCH_RECT)
@@ -1457,9 +1460,9 @@
       ctx.drawImage(im, 0, 0, im.width, h, HATCH.x, HATCH.y, im.width * HS, h * HS);
       return;
     }
-    const hs = nv.height - P.sy, sc = Math.min(320 / nv.width, (P.hmax || 190) / hs), w = nv.width * sc, h = hs * sc, x0 = HATCH_RECT.x + HATCH_RECT.w / 2 - w / 2, y0 = (P.bas || HATCH.y + 182) - h;      // bas = ligne du rebord (9B : au village il est remonté sur le mur)
+    const hs = nv.height - P.sy, sc = Math.min(320 / nv.width, (P.hmax || 190) / hs), w = nv.width * sc, h = hs * sc, x0 = (P.cx || 361.5) - w / 2, y0 = (P.bas || HATCH.y + 182) - h;      // bas = ligne du rebord (9B : au village il est remonté sur le mur)
     HATCH_DESSIN.x = x0; HATCH_DESSIN.y = y0; HATCH_DESSIN.w = w; HATCH_DESSIN.h = h;
-    HATCH_RECT.y = Math.round(y0); HATCH_RECT.h = Math.round(h);          // 9C : la zone (clic, obstacle pour la déco) suit le dessin
+    Object.assign(HATCH_RECT, { x: Math.round(x0), y: Math.round(y0), w: Math.round(w), h: Math.round(h) });          // 9C : la zone (clic, obstacle pour la déco) suit le dessin
     ctx.drawImage(nv, 0, P.sy, nv.width, hs, x0, y0, w, h);
     Object.assign(HATCH_OUV, { x: x0 + P.ouv.x * sc, y: y0 + (P.ouv.y - P.sy) * sc, w: P.ouv.w * sc, h: P.ouv.h * sc });
     Object.assign(HATCH_PLATE, { x: Math.round(x0 + P.plat.x * sc), y: Math.round(y0 + (P.plat.y - P.sy) * sc) });

@@ -83,9 +83,9 @@ with sync_playwright() as p:
     check("écran de choix : la salle du resto 3 est dessinée en fond (pas d'erreur)", not errs, str(errs[:3]))
     ev("__jeu.G.resto = 0; __jeu.G.difficile = 0; __jeu.start(); __jeu.avancer(1)")
     h = [ev(f"(() => {{ __jeu.G.resto = {i}; __jeu.G.mode = 'play'; __jeu.start(); __jeu.rendre(); return __jeu.PASSES[{i}].bas; }})()") for i in range(4)]
-    check("passe-plats : resto 1 sur le mur (292), restos 2 à 4 redescendus (422)", h == [292, 422, 422, 422], str(h))
+    check("passe-plats : posé juste au-dessus du lambris de chaque resto (222, 360, 434, 434)", h == [222, 360, 434, 434], str(h))
     ev("__jeu.G.resto = 1; __jeu.start(); __jeu.rendre()")
-    check("la zone du passe-plats suit le dessin (rebord à 422)", abs(ev("__jeu.HATCH_RECT.y + __jeu.HATCH_RECT.h") - 422) <= 2, str(ev("__jeu.HATCH_RECT.y + __jeu.HATCH_RECT.h")))
+    check("la zone du passe-plats suit le dessin (rebord à 360 au resto 2)", abs(ev("__jeu.HATCH_RECT.y + __jeu.HATCH_RECT.h") - 360) <= 2, str(ev("__jeu.HATCH_RECT.y + __jeu.HATCH_RECT.h")))
     ev("__jeu.G.camp = __jeu.campVide(); __jeu.G.camp.restos[1].ouvert = true; __jeu.G.camp.restos[2].ouvert = true; __jeu.G.mode = 'accueil'; __jeu.G.accueilResto = 0")
     # accueil : au démarrage, le resto le plus avancé (recalculé au chargement : on le simule via la même formule)
     check("empreinte : le bon code est reconnu, un autre non", ev("__jeu.empreinte('granger-debug')") == 3907671663882622 and ev("__jeu.empreinte('Granger-debug')") != 3907671663882622)

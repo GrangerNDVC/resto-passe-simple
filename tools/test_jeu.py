@@ -164,7 +164,7 @@ with sync_playwright() as p:
     check("3 fois Espace : le dialogue est terminé", ev("!__jeu.S.dial") and ev("__jeu.commandesEnAttente().length") == 1)
     pg.keyboard.down("ArrowLeft"); ev("__jeu.avancer(0.15)"); pg.keyboard.up("ArrowLeft")       # le joueur reprend la main avant l'arrivée automatique
     check("une flèche reprend la main sur la marche automatique", ev("!__jeu.S.serveur.task"))
-    ev("__jeu.S.serveur.x = 300; __jeu.S.serveur.y = 880; __jeu.avancer(0.2)")
+    ev("__jeu.S.serveur.x = 560; __jeu.S.serveur.y = 880; __jeu.avancer(0.2)")
     check("dans la zone du passe-plats, une pastille « Espace » est affichée", ev("__jeu.auPasse()") and any("passe-plats" in z or "assiettes" in z for z in textes()))
     pg.screenshot(path=out + "/17_clavier_passe_plats.png")
     pg.keyboard.press("Space"); ev("__jeu.avancer(4)")
