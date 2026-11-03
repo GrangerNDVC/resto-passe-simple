@@ -40,7 +40,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
     pg.screenshot(path=out + "/01_titre.png")
 
-    pg.evaluate("__jeu.G.cuisine = 0; __jeu.G.difficile = 1")          # ce parcours teste la salle seule (la cuisine a son propre test : test_cuisine.py)
+    pg.evaluate("__jeu.G.cuisine = 0; __jeu.G.difficile = 0")          # ce parcours teste la salle seule (mode facile ; en difficile la cuisine est ouverte dès le début) (la cuisine a son propre test : test_cuisine.py)
     pg.evaluate("__jeu.start()")
     pg.evaluate("__jeu.avancer(2.0)")
 

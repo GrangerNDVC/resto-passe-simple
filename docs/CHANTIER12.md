@@ -1,6 +1,6 @@
 # CHANTIER 12 — Retours du mode essai : cuisine, porte, objets plus près, couleurs (01/11/2026)
 
-Version : « Version du 01/11, 20 h » (`?v=20261101-20`). Fait suite au chantier 11.
+Version : « Version du 02/11, 20 h » (`?v=20261102-20`). Fait suite au chantier 11.
 
 ## Demandes de Julie (1er novembre)
 1. Le serveur « descend du haut du mur » devant la porte de la cuisine.
@@ -33,3 +33,8 @@ Rendu sur iPad Mini 2 ; équilibrage réel du temps de cuisine avec les élèves
 - **Passe-plats (mode facile)** posé juste au-dessus du lambris de chaque resto (bas du rebord à y = 222 / 360 / 434 / 434) ; au bistrot il est centré dans l'interstice entre le cadre de score et la barre des tickets (x = 560). Sa zone cliquable, la zone du clavier et la place du serveur suivent le dessin.
 - **Porte du bistrot (mode difficile)** : reculée sur la ligne mur/sol (y = 300) et placée dans le même interstice (x = 560).
 - Tests adaptés : test_9 (hauteurs du passe-plats), test_11, test_jeu (position du serveur au passe-plats).
+
+## Précision de Julie (02/11) : le mode difficile = la cuisine, tout de suite
+- En mode difficile, **la cuisine est ouverte dès le début** et **toutes les commandes se font en écrivant le plat conjugué** (plus de choix d'assiette, plus d'ouverture après N clients). `cuisineOk() = modeDur()`, `BAL.cuisineProba = 1`, `cuis.ouverte` vrai au départ. Le réglage « cuisine : non » est ignoré. Le mode facile reste la salle seule avec le passe-plats.
+- Textes d'aide et de menu mis à jour ; les postes de cuisine continuent de s'ouvrir avec les niveaux (marmite = 1er groupe, plan de travail, plaque).
+- Tests adaptés : test_cuisine (ouverte dès le départ, toutes les commandes à cuisiner), test_jeu (le parcours « salle seule » passe en mode facile).

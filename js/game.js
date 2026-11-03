@@ -127,7 +127,7 @@
     tablesDepart: 2,                           // tables ouvertes au début de la partie (max 6)
     // Cuisine (chantier 4) — réglages de départ, à ajuster après les essais en classe
     cuisineApres: 10,                          // la cuisine s'ouvre après N clients servis d'affilée (aucun client parti fâché entre-temps)
-    cuisineProba: 0.6,                         // part des commandes à cuisiner une fois la cuisine ouverte (les autres restent des QCM en salle)
+    cuisineProba: 1,                           // chantier 12 : en mode difficile, toutes les commandes sont à cuisiner (on écrit la forme conjuguée) ; 1 = toutes
     cuisinePatMul: 2.3,                        // ces clients patientent plus longtemps (aller-retour par la porte, saisie, cuisson)
     cuisinePlus: [60, 50, 40, 30],             // chantier 8A : + secondes de patience pour écrire la forme en cuisine (une minute au resto 1, dégressif ensuite)
     cuisson: [3.2, 4.2, 5.2],                  // temps de cuisson (s) : marmite, plan de travail, plaque
@@ -402,7 +402,7 @@
   G.accueilResto = G.camp.restos.reduce((m, r, i) => (r.ouvert ? i : m), 0);          // 9C : l'écran d'accueil montre le resto le plus avancé
   // Chantier 8A : le mode difficile réunit la cuisine, les objets débloqués et les changements de couleur de la déco. Le mode facile = la salle seule, déco de base.
   const modeDur = () => G.difficile === 1;
-  const cuisineOk = () => modeDur() && !!G.cuisine;
+  const cuisineOk = () => modeDur();          // chantier 12 : le mode difficile = la cuisine, ouverte dès le début
   // Chantier 10 (préparation) : toute la partie tient dans UN objet JSON sobre (réglages, nom du resto, guide, campagne : aucune image, aucune fonction, aucune donnée personnelle).
   // Pour brancher Firebase plus tard : définir window.RESTO_STOCKAGE = { ecrire(objet) {…}, (facultatif) lire() → objet } AVANT le chargement de game.js ;
   // le jeu continue d'écrire dans le navigateur (secours hors ligne) et appelle ecrire() à chaque sauvegarde (une fois par seconde au plus). Rien ne part sans ce branchement.
@@ -464,13 +464,13 @@
       serveur: { x: 330, y: Y_COULOIR, dir: 1, path: [], task: null, pose: "idle", poseT: 0, carry: null, anim: 0, manuelT: 9 },
       tickets: [], panel: null, hatchQ: [], msgs: [], fx: [], erreurs: [], combo: 0, serie: 0, cuisines: 0,
       cuis: {
-        ouverte: false, sel: null, saisie: null, cloche: 0,
+        ouverte: cuisineOk(), sel: null, saisie: null, cloche: 0,          // mode difficile : la cuisine est ouverte dès le début
         postes: POSTES.map((P) => ({ k: P.k, etat: "repos", t: 0, dur: 0, ticketId: null, table: -1, dish: null, cmd: null, sansBonus: false })),
         chef: { pose: "neutre", lignes: [], t: 0, dur: 0 },
       },
     };
     G.mode = "play"; G.vue = "salle"; G.trans = null; if (champ()) champ().blur();
-    msg("Marche avec ← →, puis Espace pour agir", "1. Prends la commande   2. Va " + (porteMode() ? "à la porte de la cuisine" : "au passe-plats") + " choisir la bonne assiette   3. Sers la bonne table. La souris marche aussi.", "info", 8);
+    msg("Marche avec ← →, puis Espace pour agir", (modeDur() ? "1. Prends la commande   2. Passe la porte de la cuisine (C) et écris le plat conjugué   3. Sers la bonne table. La souris marche aussi." : "1. Prends la commande   2. Va au passe-plats choisir la bonne assiette   3. Sers la bonne table. La souris marche aussi."), "info", 8);
   }
   const nbTables = () => (S_.tablesFixes ? S_.tables.length : Math.min(S_.ctx.tablesMax, S_.ctx.tablesDepart + Math.floor(S_.servis / BAL.clientsParTable)));
   const tableActive = (i) => (S_.tablesFixes ? i < S_.tables.length : ORDRE_OUVERTURE.indexOf(i) < nbTables());
@@ -2235,8 +2235,8 @@
     BTN.carte = bouton(30, 112, 400, 62, "← Carte (Échap)", false, 26);
     BTN.atelier = G.libre ? null : bouton(30, 190, 400, 62, "Atelier déco (D)", false, 26);
     BTN.mode = [bouton(30, 28, 195, 70, "Facile", !modeDur(), 30), bouton(235, 28, 195, 70, "Difficile", modeDur(), 30)];
-    texte("Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
-    texte(modeDur() ? "Mode difficile : après quelques clients servis sans erreur, la cuisine s’ouvre (tu écris toi-même les plats) ; l’atelier propose aussi objets et papiers peints." : "Mode facile : la salle seule ; à l’atelier, tu achètes des tables et leurs nappes. Passe en « Difficile » pour la cuisine, les objets et les papiers peints.", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
+    texte(modeDur() ? "Prends la commande du client, passe la porte de la cuisine, écris le plat (la bonne forme conjuguée), puis sers la bonne table." : "Prends la commande du client, va au passe-plats choisir l’assiette (la bonne forme), puis sers la bonne table.", W / 2, 1008, 30, "#fff", "center", "#5a3a29", "normal");
+    texte(modeDur() ? "Mode difficile : la cuisine est ouverte dès le début (tu écris toi-même chaque plat, bien conjugué) ; l’atelier propose aussi objets et papiers peints." : "Mode facile : la salle seule ; à l’atelier, tu achètes des tables et leurs nappes. Passe en « Difficile » pour la cuisine, les objets et les papiers peints.", W / 2, 1050, 26, "#fff", "center", "#5a3a29", "normal");
     const bob = A.calme ? 0 : Math.sin(G.t * 2) * 5;                       // le chef et le serveur accueillent le joueur
     const chef = img("chef_bravo"), sv = img("serveur_content");
     if (chef) { const h = 330, w = chef.width * h / chef.height; ctx.drawImage(chef, 250 - w / 2, 960 - h + bob, w, h); }

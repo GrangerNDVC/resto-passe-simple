@@ -23,17 +23,21 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
     ev = pg.evaluate
 
-    # --- 0. bouton « Cuisine : oui/non » à l'écran titre
-    ev("localStorage.clear(); __jeu.G.mode='title'; __jeu.G.libre=true; __jeu.G.cuisine=1; __jeu.rendre()")
+    # --- 0. boutons « Facile / Difficile » à l'écran titre (chantier 8A : la cuisine n'existe qu'en mode difficile)
+    ev("localStorage.clear(); __jeu.G.mode='title'; __jeu.G.libre=true; __jeu.G.cuisine=1; __jeu.G.difficile=0; __jeu.rendre()")
     pg.screenshot(path=out + "/c01_titre.png")
-    ev("__jeu.clic({x: 230, y: 63})")
-    check("titre : le bouton Cuisine bascule sur « non »", ev("__jeu.G.cuisine") == 0)
-    ev("__jeu.clic({x: 230, y: 63})")
-    check("titre : et revient sur « oui »", ev("__jeu.G.cuisine") == 1)
+    ev("__jeu.clic({x: 330, y: 63})")
+    check("titre : le bouton Difficile active le mode difficile", ev("__jeu.G.difficile") == 1)
+    ev("__jeu.clic({x: 127, y: 63})")
+    check("titre : le bouton Facile revient en mode facile", ev("__jeu.G.difficile") == 0)
+    ev("__jeu.G.difficile = 0; __jeu.BAL.cuisineApres = 1; __jeu.BAL.cuisineProba = 1; __jeu.G.chrono = 'sans'; __jeu.G.groupe = 0; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start(); __jeu.S.serie = 5; __jeu.S.servis = 5")
+    ev("__jeu.avancer(0.5)")
+    check("mode facile : la cuisine ne s'ouvre jamais, même après une belle série", ev("(() => { const J = __jeu; const t = J.S.tables.find(t => t.client); J.S.serie = 9; return J.S.cuis.ouverte; })()") is False)
+    ev("__jeu.G.difficile = 1")
 
     # --- 1. la cuisine s'ouvre après N clients servis sans client parti fâché
     ev("__jeu.BAL.cuisineApres = 2; __jeu.BAL.cuisineProba = 1; __jeu.G.chrono = 'sans'; __jeu.G.groupe = 0; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start()")
-    check("cuisine fermée au départ", ev("__jeu.S.cuis.ouverte") is False)
+    check("mode difficile : la cuisine est ouverte dès le départ", ev("__jeu.S.cuis.ouverte") is True)
     BOT = """() => {
       const J = __jeu, S = J.S; if (!S || J.G.mode !== 'play' || J.G.vue !== 'salle') return;
       if (S.dial) { J.avancerDialogue(); return; }
@@ -53,8 +57,8 @@ with sync_playwright() as p:
         if ev("__jeu.S.cuis.ouverte") or ev("__jeu.S.servis") >= 2: break
     # les 2 premiers clients sont des QCM tant que la cuisine est fermée
     ev("__jeu.avancer(0.1)")
-    check("la cuisine s'ouvre après 2 clients servis d'affilée", ev("__jeu.S.cuis.ouverte") is True, "servis=%s" % ev("__jeu.S.servis"))
-    check("message d'annonce", any("cuisine est ouverte" in m for m in ev("__jeu.S.msgs.map(m=>m.texte)")))
+    check("la cuisine reste ouverte pendant toute la partie", ev("__jeu.S.cuis.ouverte") is True, "servis=%s" % ev("__jeu.S.servis"))
+    check("toutes les commandes sont à cuisiner (on écrit la forme conjuguée)", ev("__jeu.S.tickets.every(t => t.cuisine)"))
     ev("__jeu.avancer(5)")
     pg.screenshot(path=out + "/c02_porte_salle.png")
 
@@ -201,11 +205,11 @@ with sync_playwright() as p:
     pg.screenshot(path=out + "/c13_cuisine_parcours.png")
 
     # --- 9. cuisine désactivée : jamais de commande à cuisiner
-    ev("__jeu.G.cuisine = 0; __jeu.BAL.cuisineApres = 1; __jeu.G.chrono = 'sans'; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start()")
+    ev("__jeu.G.difficile = 1; __jeu.G.cuisine = 0; __jeu.BAL.cuisineApres = 1; __jeu.G.chrono = 'sans'; __jeu.G.guide = [0,1,2,3].map(id => ({id, v: [], nom: 'x'})); __jeu.start()")
     for _ in range(300):
         ev(BOT); ev("__jeu.avancer(0.5)")
         if ev("__jeu.S.servis") >= 6: break
-    check("cuisine désactivée : elle ne s'ouvre jamais", ev("__jeu.S.cuis.ouverte") is False and not ev("__jeu.S.tickets.some(t => t.cuisine)"), "servis=%s" % ev("__jeu.S.servis"))
+    check("ancien réglage « cuisine : non » ignoré : le mode difficile garde sa cuisine", ev("__jeu.S.cuis.ouverte") is True, "servis=%s" % ev("__jeu.S.servis"))
     ev("localStorage.clear()")
     b.close()
 
